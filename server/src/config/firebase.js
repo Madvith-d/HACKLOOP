@@ -1,21 +1,20 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+const admin = require('firebase-admin');
+const logger = require('../utils/logger');
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyDwAkj3VS3voMJb8lOtTmWSGvFSOiAXTt0",
-  authDomain: "mind-mesh-adbad.firebaseapp.com",
-  projectId: "mind-mesh-adbad",
-  storageBucket: "mind-mesh-adbad.firebasestorage.app",
-  messagingSenderId: "928344789987",
-  appId: "1:928344789987:web:c63967b1402648084c46d6",
-  measurementId: "G-LLDNGKBPJF"
-};
+// Initialize Firebase Admin SDK
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    }),
+  });
+  
+  logger.info('Firebase Admin SDK initialized successfully');
+} catch (error) {
+  logger.error('Failed to initialize Firebase Admin SDK:', error);
+  process.exit(1);
+}
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+module.exports = admin;
