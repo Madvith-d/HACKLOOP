@@ -7,6 +7,9 @@ export default function Hero() {
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.display = 'block';
 
         const scene = new THREE.Scene();
         scene.fog = new THREE.Fog(0x07070a, 10, 60);
@@ -73,12 +76,13 @@ export default function Hero() {
         window.addEventListener('resize', resize);
 
         let targetX = 0, targetY = 0;
-        window.addEventListener('mousemove', (e) => {
+        const pointerHandler = (e) => {
             const x = (e.clientX / window.innerWidth) * 2 - 1;
             const y = (e.clientY / window.innerHeight) * 2 - 1;
             targetX = x;
             targetY = y;
-        });
+        };
+        window.addEventListener('mousemove', pointerHandler);
 
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const clock = new THREE.Clock();
@@ -103,6 +107,7 @@ export default function Hero() {
         return () => {
             cancelAnimationFrame(rafId);
             window.removeEventListener('resize', resize);
+            window.removeEventListener('mousemove', pointerHandler);
             renderer.dispose();
         };
     }, []);
