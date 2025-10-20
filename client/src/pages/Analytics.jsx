@@ -77,14 +77,15 @@ export default function Analytics() {
                     <h3>Weekly Mood & Energy Trends</h3>
                     <ResponsiveContainer width="100%" height={300}>
                         <LineChart data={moodData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                            <XAxis dataKey="date" stroke="#888" />
-                            <YAxis stroke="#888" domain={[0, 10]} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="date" stroke="#64748b" />
+                            <YAxis stroke="#64748b" domain={[0, 10]} />
                             <Tooltip
                                 contentStyle={{
-                                    backgroundColor: '#1a1a2e',
-                                    border: '1px solid #333',
-                                    borderRadius: '8px'
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
                                 }}
                             />
                             <Line type="monotone" dataKey="mood" stroke="#667eea" strokeWidth={3} />
@@ -97,14 +98,15 @@ export default function Analytics() {
                     <h3>Emotion Distribution</h3>
                     <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={emotionDistribution}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                            <XAxis dataKey="emotion" stroke="#888" />
-                            <YAxis stroke="#888" />
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis dataKey="emotion" stroke="#64748b" />
+                            <YAxis stroke="#64748b" />
                             <Tooltip
                                 contentStyle={{
-                                    backgroundColor: '#1a1a2e',
-                                    border: '1px solid #333',
-                                    borderRadius: '8px'
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '8px',
+                                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
                                 }}
                             />
                             <Bar dataKey="count" fill="#667eea" radius={[8, 8, 0, 0]} />
