@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import * as THREE from 'three';
 
 export default function Hero() {
@@ -120,7 +121,9 @@ export default function Hero() {
                     <h1>Proactive AI Mental Health Companion</h1>
                     <p>MindMesh+ combines Agentic AI, Computer Vision, and professional counselling to provide truly intelligent mental health support that observes, understands, and acts.</p>
                     <div className="hero-buttons">
-                        <button className="btn-primary">Start Free Trial</button>
+                        <Link to="/signup">
+                            <button className="btn-primary">Start Free Trial</button>
+                        </Link>
                         <button className="btn-secondary">Watch Demo</button>
                     </div>
                 </div>

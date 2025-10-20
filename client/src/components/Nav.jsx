@@ -1,13 +1,17 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 export default function Nav() {
     return (
         <nav>
-            <div className="logo">MindMesh+</div>
+            <Link to="/" className="logo">MindMesh+</Link>
             <ul className="nav-links">
                 <li><a href="#features">Features</a></li>
+                <li><Link to="/login">Sign In</Link></li>
             </ul>
-            <button className="cta-button">Get Started</button>
+            <Link to="/signup">
+                <button className="cta-button">Get Started</button>
+            </Link>
         </nav>
     );
 }
