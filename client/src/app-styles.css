@@ -2,7 +2,7 @@
 .app-layout {
     display: flex;
     min-height: 100vh;
-    background: #f5f7fa;
+    background: #fafafa;
 }
 
 .app-main {
@@ -19,9 +19,8 @@
     top: 0;
     width: 280px;
     height: 100vh;
-    background: linear-gradient(180deg, #ffffff 0%, #f8f9fb 100%);
-    border-right: 1px solid rgba(102, 126, 234, 0.15);
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+    background: #ffffff;
+    border-right: 1px solid hsl(var(--border));
     display: flex;
     flex-direction: column;
     z-index: 1000;
@@ -29,19 +28,14 @@
 
 .sidebar-header {
     padding: 2rem 1.5rem;
-    border-bottom: 1px solid rgba(102, 126, 234, 0.15);
+    border-bottom: 1px solid hsl(var(--border));
 }
 
 .sidebar-header h2 {
     font-size: 1.5rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    font-weight: 700;
-}
-
-.sidebar-header span {
-    color: #f093fb;
+    color: var(--color-foreground);
+    font-weight: 800;
+    letter-spacing: -0.02em;
 }
 
 .sidebar-nav {
@@ -53,28 +47,30 @@
 .nav-item {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 1rem 1.5rem;
-    color: #64748b;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    color: var(--color-muted-foreground);
     text-decoration: none;
-    transition: all 0.3s ease;
-    border-left: 3px solid transparent;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin: 0.125rem 0.75rem;
+    border-radius: 0.5rem;
 }
 
 .nav-item:hover {
-    background: rgba(102, 126, 234, 0.08);
-    color: #1e293b;
+    background: var(--color-secondary);
+    color: var(--color-foreground);
 }
 
 .nav-item.active {
-    background: rgba(102, 126, 234, 0.12);
-    color: #667eea;
-    border-left-color: #667eea;
+    background: var(--color-foreground);
+    color: white;
 }
 
 .sidebar-footer {
     padding: 1.5rem;
-    border-top: 1px solid rgba(102, 126, 234, 0.15);
+    border-top: 1px solid hsl(var(--border));
 }
 
 .logout-btn {
@@ -82,17 +78,19 @@
     align-items: center;
     gap: 0.75rem;
     width: 100%;
-    padding: 0.875rem;
+    padding: 0.75rem 1rem;
     background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    border: 1px solid rgba(239, 68, 68, 0.2);
     color: #ef4444;
-    border-radius: 8px;
+    border-radius: 0.5rem;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    font-size: 0.95rem;
+    font-weight: 600;
 }
 
 .logout-btn:hover {
-    background: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.15);
 }
 
 /* Page Header */
@@ -103,13 +101,12 @@
 .page-header h1 {
     font-size: 2rem;
     margin-bottom: 0.5rem;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: var(--color-foreground);
+    font-weight: 800;
 }
 
 .page-header p {
-    color: #64748b;
+    color: var(--color-muted-foreground);
     font-size: 1.05rem;
 }
 
@@ -233,19 +230,24 @@
 
 .stat-card {
     background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
     padding: 1.5rem;
     display: flex;
     align-items: center;
     gap: 1rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    border-color: hsl(var(--foreground));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 .stat-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    border-radius: 0.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -253,11 +255,13 @@
 
 .stat-content h3 {
     font-size: 1.75rem;
+    font-weight: 700;
     margin-bottom: 0.25rem;
+    color: var(--color-foreground);
 }
 
 .stat-content p {
-    color: #64748b;
+    color: var(--color-muted-foreground);
     font-size: 0.95rem;
 }
 
@@ -270,15 +274,16 @@
 
 .dashboard-section {
     background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
     padding: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .dashboard-section h2 {
     font-size: 1.25rem;
+    font-weight: 700;
     margin-bottom: 1.5rem;
+    color: var(--color-foreground);
 }
 
 .quick-actions-grid {
@@ -293,24 +298,25 @@
     align-items: center;
     gap: 0.75rem;
     padding: 1.5rem;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    background: var(--color-secondary);
+    border: 1px solid hsl(var(--border));
+    border-radius: 0.5rem;
     text-decoration: none;
-    color: #1e293b;
-    transition: all 0.3s ease;
+    color: var(--color-foreground);
+    transition: all 0.2s ease;
+    font-weight: 600;
 }
 
 .quick-action-card:hover {
-    transform: translateY(-4px);
-    background: #f1f5f9;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+    border-color: hsl(var(--foreground));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
 .action-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    border-radius: 0.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -327,19 +333,20 @@
     display: flex;
     gap: 1rem;
     padding: 1rem;
-    background: #f8fafc;
-    border-radius: 8px;
+    background: var(--color-secondary);
+    border-radius: 0.5rem;
 }
 
 .activity-icon {
     width: 32px;
     height: 32px;
-    background: rgba(102, 126, 234, 0.12);
-    border-radius: 8px;
+    background: var(--color-foreground);
+    border-radius: 0.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #667eea;
+    color: white;
+    flex-shrink: 0;
 }
 
 .activity-content {
@@ -348,15 +355,27 @@
 
 .activity-content p {
     margin-bottom: 0.25rem;
+    color: var(--color-foreground);
+    font-weight: 500;
 }
 
 .activity-time {
     font-size: 0.85rem;
-    color: #64748b;
+    color: var(--color-muted-foreground);
 }
 
 .daily-tip {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+    background: var(--color-secondary);
+    border: 1px solid hsl(var(--border));
+}
+
+.daily-tip h2 {
+    margin-bottom: 1rem;
+}
+
+.daily-tip p {
+    color: var(--color-muted-foreground);
+    line-height: 1.6;
 }
 
 /* Voice Chat Page */
