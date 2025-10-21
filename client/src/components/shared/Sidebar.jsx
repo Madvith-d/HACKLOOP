@@ -13,7 +13,8 @@ export default function Sidebar() {
         navigate('/');
     };
 
-    const navItems = [
+    const { user } = useApp();
+    const baseNavItems = [
         { path: '/dashboard', icon: Home, label: 'Dashboard' },
         { path: '/chat', icon: MessageCircle, label: 'AI Chat' },
         { path: '/emotion', icon: Camera, label: 'Emotion Tracking' },
@@ -22,11 +23,24 @@ export default function Sidebar() {
         { path: '/profile', icon: User, label: 'Profile' },
         { path: '/crisis', icon: AlertCircle, label: 'Crisis Support' },
     ];
+    
+    const adminNavItems = [
+        { path: '/admin', icon: Home, label: 'Admin Dashboard' },
+        { path: '/profile', icon: User, label: 'Profile' },
+    ];
+    const therapistNavItems = [
+        { path: '/therapist', icon: Home, label: 'Therapist Dashboard' },
+        { path: '/analytics', icon: BarChart3, label: 'Analytics' },
+        { path: '/profile', icon: User, label: 'Profile' },
+    ];
+    const navItems = user?.role === 'admin' ? adminNavItems : 
+                     user?.role === 'therapist' ? therapistNavItems : 
+                     baseNavItems;
 
     return (
         <aside className="sidebar">
             <div className="sidebar-header">
-                <h2>MindMesh<span>+</span></h2>
+                <h2>MindMesh+</h2>
             </div>
             <nav className="sidebar-nav">
                 {navItems.map((item) => {

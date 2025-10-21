@@ -15,6 +15,9 @@ const Therapists = lazy(() => import('./pages/Therapists'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Profile = lazy(() => import('./pages/Profile'));
 const CrisisSupport = lazy(() => import('./pages/CrisisSupport'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const TherapistDashboard = lazy(() => import('./pages/therapist/TherapistDashboard'));
+const VideoCall = lazy(() => import('./pages/VideoCall'));
 
 export default function App() {
     return (
@@ -25,6 +28,7 @@ export default function App() {
                         <Route path="/" element={<Landing />} />
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<Signup />} />
+                        <Route path="/video-call" element={<VideoCall />} />
                         
                         <Route element={
                             <ProtectedRoute>
@@ -38,6 +42,8 @@ export default function App() {
                             <Route path="/analytics" element={<Analytics />} />
                             <Route path="/profile" element={<Profile />} />
                             <Route path="/crisis" element={<CrisisSupport />} />
+                            <Route path="/admin" element={<AdminDashboard />} />
+                            <Route path="/therapist" element={<TherapistDashboard />} />
                         </Route>
                         
                         <Route path="*" element={<Navigate to="/" replace />} />
