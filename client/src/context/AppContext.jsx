@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { calculateWellnessScore, generateRecommendations } from '../utils/wellnessAgent';
 
 const AppContext = createContext();
 
@@ -7,6 +8,8 @@ export function AppProvider({ children }) {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [emotionHistory, setEmotionHistory] = useState([]);
     const [sessions, setSessions] = useState([]);
+    const [wellnessScore, setWellnessScore] = useState(null);
+    const [recommendations, setRecommendations] = useState([]);
 
     useEffect(() => {
         // Check for stored auth
@@ -36,6 +39,15 @@ export function AppProvider({ children }) {
     const addSession = (session) => {
         setSessions(prev => [...prev, session]);
     };
+    useEffect(() => {
+        if (emotionHistory.length > 0) {
+            const wellness = calculateWellnessScore(emotionHistory);
+            setWellnessScore(wellness);
+            
+            const recs = generateRecommendations(wellness, emotionHistory);
+            setRecommendations(recs);
+        }
+    }, [emotionHistory]);
 
     return (
         <AppContext.Provider value={{
@@ -43,6 +55,8 @@ export function AppProvider({ children }) {
             isAuthenticated,
             emotionHistory,
             sessions,
+            wellnessScore,
+            recommendations,
             login,
             logout,
             addEmotionRecord,

@@ -2,9 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { MessageCircle, Camera, Calendar, TrendingUp, Heart, Brain, Zap } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import WellnessRecommendations from '../components/WellnessRecommendations';
 
 export default function Dashboard() {
-    const { user, emotionHistory, sessions } = useApp();
+    const { user, emotionHistory, sessions, wellnessScore, recommendations } = useApp();
 
     const stats = [
         { label: 'Check-ins This Week', value: '12', icon: Heart, color: '#667eea' },
@@ -35,6 +36,12 @@ export default function Dashboard() {
                     <p>Here's your mental wellness overview</p>
                 </div>
             </header>
+            {recommendations && recommendations.length > 0 && (
+                <WellnessRecommendations 
+                    recommendations={recommendations} 
+                    wellnessScore={wellnessScore}
+                />
+            )}
 
             <div className="stats-grid">
                 {stats.map((stat, index) => {
