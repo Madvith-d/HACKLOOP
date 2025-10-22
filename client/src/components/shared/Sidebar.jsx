@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, MessageCircle, Camera, Calendar, BarChart3, User, AlertCircle, LogOut, BookOpen, CheckSquare } from 'lucide-react';
+import { Home, MessageCircle, Camera, Calendar, BarChart3, User, AlertCircle, LogOut } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function Sidebar() {
@@ -18,8 +18,6 @@ export default function Sidebar() {
         { path: '/dashboard', icon: Home, label: 'Dashboard' },
         { path: '/chat', icon: MessageCircle, label: 'AI Chat' },
         { path: '/emotion', icon: Camera, label: 'Emotion Tracking' },
-        { path: '/journal', icon: BookOpen, label: 'Journal' },
-        { path: '/habits', icon: CheckSquare, label: 'Habit Tracker' },
         { path: '/therapists', icon: Calendar, label: 'Therapists' },
         { path: '/analytics', icon: BarChart3, label: 'Analytics' },
         { path: '/profile', icon: User, label: 'Profile' },
