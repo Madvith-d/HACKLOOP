@@ -19,7 +19,6 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const TherapistDashboard = lazy(() => import('./pages/therapist/TherapistDashboard'));
 const PatientDetails = lazy(() => import('./pages/therapist/PatientDetails'));
 const VideoCall = lazy(() => import('./pages/VideoCall'));
-const VideoCall = lazy(() => import('./pages/VideoCall'));
 
 export default function App() {
     return (
