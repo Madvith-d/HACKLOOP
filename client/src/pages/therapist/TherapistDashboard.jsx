@@ -303,7 +303,17 @@ export default function TherapistDashboard() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
                     {recentPatients.map((patient) => (
-                        <div key={patient.id} className="card" style={{ padding: '1.5rem' }}>
+                        <div 
+                            key={patient.id} 
+                            className="card" 
+                            style={{ 
+                                padding: '1.5rem', 
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                            onClick={() => navigate(`/therapist/patient/${patient.id}`)}
+                            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+                            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}>
                             <div style={{ marginBottom: '1rem' }}>
                                 <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>
                                     {patient.name}
@@ -355,16 +365,21 @@ export default function TherapistDashboard() {
                                 }}>
                                     {patient.moodTrend}
                                 </span>
-                                <button style={{
-                                    padding: '0.5rem 1rem',
-                                    background: 'transparent',
-                                    border: '1px solid hsl(var(--border))',
-                                    borderRadius: '0.5rem',
-                                    fontSize: '0.875rem',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    color: 'var(--color-foreground)',
-                                }}>
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/therapist/patient/${patient.id}`);
+                                    }}
+                                    style={{
+                                        padding: '0.5rem 1rem',
+                                        background: 'transparent',
+                                        border: '1px solid hsl(var(--border))',
+                                        borderRadius: '0.5rem',
+                                        fontSize: '0.875rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        color: 'var(--color-foreground)',
+                                    }}>
                                     View Details
                                 </button>
                             </div>
