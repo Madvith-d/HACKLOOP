@@ -1,55 +1,101 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const dataStore = require('../utils/dataStore');
 
-const authController = require('../controllers/authController');
-const { authenticate, requireRole } = require('../middleware/auth');
-const { validateBody, schemas } = require('../middleware/validate');
-const { authLimiter, roleBasedLimiter } = require('../middleware/rateLimiter');
+// Signup
+router.post('/signup', async (req, res) => {
+    try {
+        const { name, email, password, role } = req.body;
 
-// Public routes (no authentication required)
-router.post(
-  '/signup',
-  authLimiter,
-  validateBody(schemas.userSignup),
-  authController.signup
-);
+        if (!name || !email || !password) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        const existingUser = dataStore.getUserByEmail(email);
+        if (existingUser) {
+            return res.status(400).json({ error: 'User already exists' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = dataStore.createUser({
+            name,
+            email,
+            password: hashedPassword,
+            role: role || 'user',
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
+        });
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+        const { password: _, ...userWithoutPassword } = user;
 
-router.post(
-  '/signin',
-  authLimiter,
-  validateBody(schemas.signin),
-  authController.signin
-);
+        res.status(201).json({
+            user: userWithoutPassword,
+            token
+        });
+    } catch (error) {
+        console.error('Signup error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 
-router.post(
-  '/password-reset',
-  authLimiter,
-  validateBody(schemas.passwordReset),
-  authController.passwordReset
-);
+// Login
+router.post('/login', async (req, res) => {
+    try {
+        const { email, password, role } = req.body;
 
-// Protected routes (authentication required)
-router.use(authenticate);
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        const user = dataStore.getUserByEmail(email);
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        if (role && user.role !== role) {
+            return res.status(403).json({ error: 'Access denied for this role' });
+        }
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+        const { password: _, ...userWithoutPassword } = user;
 
-router.get('/me', authController.getMe);
+        res.json({
+            user: userWithoutPassword,
+            token
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+router.get('/verify', (req, res) => {
+    try {
+        const token = req.headers.authorization?.replace('Bearer ', '');
+        
+        if (!token) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
 
-router.post('/refresh', authController.refresh);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const user = dataStore.getUserById(decoded.id);
 
-router.put(
-  '/profile',
-  validateBody(schemas.profileUpdate),
-  authController.updateProfile
-);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
 
-router.post('/verify-email', authController.verifyEmail);
-
-router.delete('/account', authController.deleteAccount);
-
-// Admin only routes
-router.get(
-  '/stats',
-  requireRole('admin'),
-  authController.getStats
-);
+        const { password: _, ...userWithoutPassword } = user;
+        res.json({ user: userWithoutPassword });
+    } catch (error) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
+});
 
 module.exports = router;
