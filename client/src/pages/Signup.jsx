@@ -155,15 +155,24 @@ export default function Signup() {
                 alignItems: 'center',
                 position: 'relative',
                 zIndex: 1,
+                flexDirection: 'row',
             }}>
+            <style>{`
+                @media (max-width: 968px) {
+                    .auth-side-content {
+                        display: none !important;
+                    }
+                }
+            `}</style>
                 {/* Left side - Signup form */}
                 <div className="card auth-form-card" style={{
                     width: '100%',
                     maxWidth: '450px',
-                    padding: '3rem',
+                    padding: 'clamp(1.5rem, 4vw, 3rem)',
                     opacity: isLoaded ? 1 : 0,
                     transform: isLoaded ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
                     transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.2s',
+                    margin: '0 auto',
                 }}>
                 <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
                     <h1 style={{
