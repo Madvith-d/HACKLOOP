@@ -591,9 +591,21 @@ export default function Chat() {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [conversation, setConversation] = useState([]);
-    const [avatarText, setAvatarText] = useState('Hi! I\'m Maya, your wellness companion. Click the mic to talk to me!');
+    const [avatarText, setAvatarText] = useState('Hi! I\'m Maya, your wellness companion. Talk to me or type below!');
+    const [textInput, setTextInput] = useState('');
+    const [conversationHistory, setConversationHistory] = useState([]);
+    const [selectedSession, setSelectedSession] = useState(null);
+    const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [audioLevel, setAudioLevel] = useState(0);
+    const [showShortcuts, setShowShortcuts] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
     const recognitionRef = useRef(null);
     const synthRef = useRef(window.speechSynthesis);
+    const messagesEndRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const analyserRef = useRef(null);
+    const textInputRef = useRef(null);
     const { user } = useApp();
 
     useEffect(() => {
@@ -672,14 +684,147 @@ export default function Chat() {
         const userMsg = { role: 'user', content: text, timestamp: new Date() };
         setConversation(prev => [...prev, userMsg]);
         
+        setIsTyping(true);
+        
         setTimeout(() => {
             const aiResponse = generateAIResponse(text);
             const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
+            setIsTyping(false);
             setConversation(prev => [...prev, aiMsg]);
             setAvatarText(aiResponse);
             speak(aiResponse);
-        }, 500);
+        }, 800 + Math.random() * 1200);
     };
+
+    const handleTextSubmit = (e) => {
+        e.preventDefault();
+        if (!textInput.trim() || isSpeaking) return;
+        const userMsg = { role: 'user', content: textInput, timestamp: new Date() };
+        setConversation(prev => [...prev, userMsg]);
+        setTextInput('');
+        setIsTyping(true);
+        
+        setTimeout(() => {
+            const aiResponse = generateAIResponse(textInput);
+            const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
+            setIsTyping(false);
+            setConversation(prev => [...prev, aiMsg]);
+            setAvatarText(aiResponse);
+            speak(aiResponse);
+        }, 800 + Math.random() * 1200);
+    };
+
+    const copyMessage = (content) => {
+        navigator.clipboard.writeText(content);
+    };
+
+    const giveFeedback = (messageIndex, isPositive) => {
+        console.log(`Feedback for message ${messageIndex}: ${isPositive ? 'positive' : 'negative'}`);
+    };
+
+    const saveConversation = () => {
+        if (conversation.length === 0) return;
+        
+        const sessionId = Date.now();
+        const session = {
+            id: sessionId,
+            title: conversation[0]?.content.substring(0, 30) + '...',
+            messages: [...conversation],
+            date: new Date()
+        };
+        
+        setConversationHistory(prev => [session, ...prev]);
+        setConversation([]);
+        setAvatarText('Hi! I\'m Maya, your wellness companion. Talk to me or type below!');
+    };
+
+    const loadConversation = (session) => {
+        setSelectedSession(session);
+        setConversation(session.messages);
+        setAvatarText(session.messages[session.messages.length - 1]?.content || 'Session loaded!');
+    };
+
+    const deleteSession = (sessionId) => {
+        setConversationHistory(prev => prev.filter(s => s.id !== sessionId));
+        if (selectedSession?.id === sessionId) {
+            setSelectedSession(null);
+            setConversation([]);
+        }
+    };
+
+    const startNewChat = () => {
+        if (conversation.length > 0) {
+            saveConversation();
+        }
+        setConversation([]);
+        setSelectedSession(null);
+        setAvatarText('Hi! I\'m Maya, your wellness companion. Talk to me or type below!');
+    };
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [conversation, isTyping]);
+    useEffect(() => {
+        if (isListening) {
+            const interval = setInterval(() => {
+                setAudioLevel(Math.random() * 100);
+            }, 100);
+            return () => clearInterval(interval);
+        } else {
+            setAudioLevel(0);
+        }
+    }, [isListening]);
+    useEffect(() => {
+        const handleKeyPress = (e) => {
+            // Ctrl/Cmd + K - Focus input
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                textInputRef.current?.focus();
+            }
+            // Ctrl/Cmd + N - New chat
+            if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+                e.preventDefault();
+                startNewChat();
+            }
+            // Ctrl/Cmd + S - Save conversation
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                if (conversation.length > 0) {
+                    saveConversation();
+                }
+            }
+            // Ctrl/Cmd + / - Show shortcuts
+            if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+                e.preventDefault();
+                setShowShortcuts(prev => !prev);
+            }
+            // Escape - Clear input or hide shortcuts
+            if (e.key === 'Escape') {
+                if (showShortcuts) {
+                    setShowShortcuts(false);
+                } else if (textInput) {
+                    setTextInput('');
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyPress);
+        return () => window.removeEventListener('keydown', handleKeyPress);
+    }, [conversation, textInput, showShortcuts]);
+    useEffect(() => {
+        if (conversation.length > 0 && document.hidden) {
+            setUnreadCount(prev => prev + 1);
+        }
+    }, [conversation]);
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                setUnreadCount(0);
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }, []);
 
     const toggleListening = () => {
         if (isListening) {
@@ -704,91 +849,272 @@ export default function Chat() {
     };
 
     return (
-        <div className="voice-chat-page">
-            <header className="page-header">
-                <div>
-                    <h1>Meet Maya - Your Voice Companion</h1>
-                    <p>Speak with your AI wellness companion</p>
-                </div>
-            </header>
-
-            <div className="voice-chat-container">
-                <div className="avatar-section">
-                    <Canvas camera={{ position: [0, 0, 3], fov: 50 }} shadows>
-                        <ambientLight intensity={0.6} />
-                        <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
-                        <spotLight position={[0, 10, 0]} angle={0.3} penumbra={1} intensity={0.8} />
-                        <Suspense fallback={
-                            <Html center>
-                                <div style={{ color: 'white', fontSize: '1.2rem' }}>Loading Maya...</div>
-                            </Html>
-                        }>
-                            <RealisticAvatar isSpeaking={isSpeaking} />
-                        </Suspense>
-                        <OrbitControls 
-                            enableZoom={false}
-                            enablePan={false}
-                            minPolarAngle={Math.PI / 4}
-                            maxPolarAngle={Math.PI / 1.8}
-                            target={[0, 0.5, 0]}
-                        />
-                    </Canvas>
-                </div>
-
-                <div className="voice-interaction">
-                    <div className="avatar-speech-bubble">
-                        <p>{avatarText}</p>
-                        {isSpeaking && <div className="speaking-indicator">Speaking...</div>}
-                    </div>
-
-                    <div className="voice-controls">
-                        <button 
-                            onClick={toggleListening} 
-                            className={`voice-btn ${isListening ? 'listening' : ''}`}
-                            disabled={isSpeaking}
-                        >
-                            {isListening ? <MicOff size={32} /> : <Mic size={32} />}
-                            <span>{isListening ? 'Stop Listening' : 'Click to Speak'}</span>
-                        </button>
-
-                        {isSpeaking && (
-                            <button onClick={stopSpeaking} className="stop-btn">
-                                <VolumeX size={24} />
-                                <span>Stop Speaking</span>
+        <div className={`gamified-chat-page ${isFullscreen ? 'fullscreen-mode' : ''}`}>
+            {showShortcuts && (
+                <div className="shortcuts-overlay" onClick={() => setShowShortcuts(false)}>
+                    <div className="shortcuts-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="shortcuts-header">
+                            <h3>⌨️ Keyboard Shortcuts</h3>
+                            <button onClick={() => setShowShortcuts(false)} className="close-shortcuts">
+                                ✕
                             </button>
+                        </div>
+                        <div className="shortcuts-list">
+                            <div className="shortcut-item">
+                                <span className="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>K</kbd></span>
+                                <span className="shortcut-desc">Focus input field</span>
+                            </div>
+                            <div className="shortcut-item">
+                                <span className="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>N</kbd></span>
+                                <span className="shortcut-desc">Start new chat</span>
+                            </div>
+                            <div className="shortcut-item">
+                                <span className="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>S</kbd></span>
+                                <span className="shortcut-desc">Save conversation</span>
+                            </div>
+                            <div className="shortcut-item">
+                                <span className="shortcut-keys"><kbd>Ctrl</kbd> + <kbd>/</kbd></span>
+                                <span className="shortcut-desc">Toggle shortcuts</span>
+                            </div>
+                            <div className="shortcut-item">
+                                <span className="shortcut-keys"><kbd>Esc</kbd></span>
+                                <span className="shortcut-desc">Clear input / Close</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            <button 
+                className="fullscreen-toggle-btn"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+            >
+                {isFullscreen ? '⊟' : '⊞'}
+            </button>
+            <button 
+                className="shortcuts-hint-btn"
+                onClick={() => setShowShortcuts(true)}
+                title="Keyboard shortcuts (Ctrl + /)">
+                ⌨️
+            </button>
+            
+            <div className="chat-layout">
+                <div className="chat-sidebar">
+                    <div className="sidebar-header-chat">
+                        <div className="header-with-badge">
+                            <h3>💬 Chat Sessions</h3>
+                            {conversationHistory.length > 0 && (
+                                <span className="session-badge">{conversationHistory.length}</span>
+                            )}
+                        </div>
+                        <button className="new-chat-btn" onClick={startNewChat} title="New Chat (Ctrl+N)">
+                            +
+                        </button>
+                    </div>
+                    
+                    <div className="sessions-list">
+                        {conversationHistory.length === 0 ? (
+                            <div className="empty-sessions">
+                                <div className="empty-icon">📝</div>
+                                <p>No saved conversations</p>
+                                <span className="empty-hint">Start chatting to create your first session</span>
+                            </div>
+                        ) : (
+                            conversationHistory.map((session) => (
+                                <div 
+                                    key={session.id} 
+                                    className={`session-card ${selectedSession?.id === session.id ? 'active' : ''}`}
+                                    onClick={() => loadConversation(session)}
+                                >
+                                    <div className="session-info">
+                                        <h4>{session.title}</h4>
+                                        <p>{new Date(session.date).toLocaleDateString()}</p>
+                                        <span className="message-count">{session.messages.length} messages</span>
+                                    </div>
+                                    <button 
+                                        className="delete-session-btn"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteSession(session.id);
+                                        }}
+                                        title="Delete"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))
                         )}
                     </div>
-
-                    {isListening && (
-                        <div className="listening-indicator">
-                            <div className="pulse"></div>
-                            <p>Listening... Speak now</p>
-                        </div>
-                    )}
-
-                    {transcript && (
-                        <div className="transcript">
-                            <p><strong>You said:</strong> {transcript}</p>
-                        </div>
+                    
+                    {conversation.length > 0 && (
+                        <button className="save-conversation-btn" onClick={saveConversation}>
+                            💾 Save Current Chat
+                        </button>
                     )}
                 </div>
+                <div className="chat-main">
+                    <div className="avatar-container-3d">
+                        <Canvas camera={{ position: [0, 0, 3], fov: 50 }} shadows>
+                            <ambientLight intensity={0.6} />
+                            <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
+                            <spotLight position={[0, 10, 0]} angle={0.3} penumbra={1} intensity={0.8} />
+                            <Suspense fallback={
+                                <Html center>
+                                    <div className="loading-maya">Loading Maya...</div>
+                                </Html>
+                            }>
+                                <RealisticAvatar isSpeaking={isSpeaking} />
+                            </Suspense>
+                            <OrbitControls 
+                                enableZoom={false}
+                                enablePan={false}
+                                minPolarAngle={Math.PI / 4}
+                                maxPolarAngle={Math.PI / 1.8}
+                                target={[0, 0.5, 0]}
+                            />
+                        </Canvas>
 
-                <div className="conversation-history">
-                    <h3>Conversation</h3>
-                    <div className="history-list">
-                        {conversation.map((msg, index) => (
-                            <div key={index} className={`history-item ${msg.role}`}>
-                                <div className="history-avatar">
-                                    {msg.role === 'user' ? '🙂' : '👩'}
+                        <div className="status-badge">
+                            <div className={`status-indicator ${isSpeaking ? 'speaking' : isListening ? 'listening' : 'idle'}`}></div>
+                            <span>{isSpeaking ? 'Speaking' : isListening ? 'Listening' : 'Ready'}</span>
+                        </div>
+                    </div>
+
+                    <div className="messages-area">
+                        <div className="messages-scroll">
+                            {conversation.length === 0 ? (
+                                <div className="welcome-message">
+                                    <div className="empty-state-icon">💬</div>
+                                    <h2>Start a Conversation</h2>
+                                    <p className="empty-state-desc">Choose a topic below or type your own message</p>
+                                    <div className="quick-starters">
+                                        <button onClick={() => setTextInput("I'm feeling anxious today")}>💭 Feeling anxious</button>
+                                        <button onClick={() => setTextInput("I need help managing stress")}>😓 Managing stress</button>
+                                        <button onClick={() => setTextInput("Tell me about meditation")}>🧘 Learn meditation</button>
+                                    </div>
                                 </div>
-                                <div className="history-content">
-                                    <p>{msg.content}</p>
-                                    <span className="history-time">
-                                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
+                            ) : (
+                                <>
+                                    {conversation.map((msg, index) => (
+                                        <div key={index} className={`chat-message ${msg.role}`}>
+                                            <div className="message-avatar-icon">
+                                                {msg.role === 'user' ? '👤' : '🤖'}
+                                            </div>
+                                            <div className="message-bubble-wrapper">
+                                                <div className="message-bubble">
+                                                    <p>{msg.content}</p>
+                                                    <span className="message-timestamp">
+                                                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+                                                {msg.role === 'ai' && (
+                                                    <div className="message-actions">
+                                                        <button 
+                                                            className="message-action-btn"
+                                                            onClick={() => copyMessage(msg.content)}
+                                                            title="Copy message"
+                                                        >
+                                                            📋
+                                                        </button>
+                                                        <button 
+                                                            className="message-action-btn"
+                                                            onClick={() => giveFeedback(index, true)}
+                                                            title="Helpful"
+                                                        >
+                                                            👍
+                                                        </button>
+                                                        <button 
+                                                            className="message-action-btn"
+                                                            onClick={() => giveFeedback(index, false)}
+                                                            title="Not helpful"
+                                                        >
+                                                            👎
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    
+                                    {/* Typing Indicator */}
+                                    {isTyping && (
+                                        <div className="chat-message ai typing-message">
+                                            <div className="message-avatar-icon">
+                                                🤖
+                                            </div>
+                                            <div className="message-bubble typing-bubble">
+                                                <div className="typing-dots">
+                                                    <span></span>
+                                                    <span></span>
+                                                    <span></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+                    </div>
+                    <div className="chat-input-zone">
+                        {isListening && (
+                            <div className="listening-animation">
+                                <div className="voice-visualizer">
+                                    {[...Array(5)].map((_, i) => (
+                                        <div 
+                                            key={i} 
+                                            className="voice-bar"
+                                            style={{
+                                                height: `${Math.max(20, audioLevel * (0.5 + Math.random() * 0.5))}%`,
+                                                animationDelay: `${i * 0.1}s`
+                                            }}
+                                        ></div>
+                                    ))}
                                 </div>
+                                <span>Listening...</span>
                             </div>
-                        ))}
+                        )}
+                        
+                        <form onSubmit={handleTextSubmit} className="input-form">
+                            <button 
+                                type="button"
+                                className={`mic-button ${isListening ? 'active' : ''}`}
+                                onClick={toggleListening}
+                                disabled={isSpeaking}
+                                title={isListening ? 'Stop listening' : 'Start voice input'}
+                            >
+                                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                            </button>
+                            
+                            <input 
+                                ref={textInputRef}
+                                type="text"
+                                className="text-input-field"
+                                placeholder="Type your message or use voice... (Ctrl+K to focus)"
+                                value={textInput}
+                                onChange={(e) => setTextInput(e.target.value)}
+                                disabled={isSpeaking || isListening}
+                            />
+                            
+                            <button 
+                                type="submit"
+                                className="send-button"
+                                disabled={!textInput.trim() || isSpeaking || isListening}
+                            >
+                                ➤
+                            </button>
+                            
+                            {isSpeaking && (
+                                <button 
+                                    type="button"
+                                    className="stop-speaking-btn"
+                                    onClick={stopSpeaking}
+                                    title="Stop speaking"
+                                >
+                                    <VolumeX size={20} />
+                                </button>
+                            )}
+                        </form>
                     </div>
                 </div>
             </div>
