@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, MessageCircle, Camera, Calendar, BarChart3, User, AlertCircle, LogOut } from 'lucide-react';
+import { Home, MessageCircle, Camera, Calendar, BarChart3, User, AlertCircle, LogOut, Menu, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
-export default function Sidebar() {
+export default function Sidebar({ isCollapsed, onToggle }) {
     const location = useLocation();
     const navigate = useNavigate();
     const { logout } = useApp();
@@ -38,9 +38,17 @@ export default function Sidebar() {
                      baseNavItems;
 
     return (
-        <aside className="sidebar">
+        <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+            <button 
+                className="hamburger-btn" 
+                onClick={onToggle}
+                aria-label="Toggle sidebar"
+            >
+                {isCollapsed ? <Menu size={24} /> : <X size={24} />}
+            </button>
+            
             <div className="sidebar-header">
-                <h2>MindMesh+</h2>
+                <h2>{isCollapsed ? 'MM+' : 'MindMesh+'}</h2>
             </div>
             <nav className="sidebar-nav">
                 {navItems.map((item) => {
@@ -51,17 +59,18 @@ export default function Sidebar() {
                             key={item.path}
                             to={item.path}
                             className={`nav-item ${isActive ? 'active' : ''}`}
+                            title={isCollapsed ? item.label : ''}
                         >
                             <Icon size={20} />
-                            <span>{item.label}</span>
+                            <span className="nav-label">{item.label}</span>
                         </Link>
                     );
                 })}
             </nav>
             <div className="sidebar-footer">
-                <button onClick={handleLogout} className="logout-btn">
+                <button onClick={handleLogout} className="logout-btn" title={isCollapsed ? 'Logout' : ''}>
                     <LogOut size={20} />
-                    <span>Logout</span>
+                    <span className="nav-label">Logout</span>
                 </button>
             </div>
         </aside>

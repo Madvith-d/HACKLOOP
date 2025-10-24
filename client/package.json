@@ -12,7 +12,6 @@
         "@amplitude/analytics-browser": "^2.27.0",
         "@react-three/drei": "^9.88.0",
         "@react-three/fiber": "^8.15.0",
-        "@react-three/postprocessing": "^3.0.4",
         "@readyplayerme/visage": "^6.16.0",
         "date-fns": "^4.1.0",
         "face-api.js": "^0.22.2",

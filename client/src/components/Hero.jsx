@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 export default function Hero() {
 
     return (
-        <section style={{
+        <section id="hero" style={{
             minHeight: '100vh',
             display: 'flex',
             alignItems: 'center',
@@ -75,6 +75,7 @@ export default function Hero() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    padding: '0 4rem', // Add padding to prevent overflow
                 }}>
                     {/* Main mockup container */}
                     <div className="card" style={{
@@ -180,12 +181,14 @@ export default function Hero() {
                     {/* Floating feature cards */}
                     <div className="card" style={{
                         position: 'absolute',
-                        left: '-2rem',
-                        top: '10%',
+                        left: '0',
+                        top: '8%',
                         padding: '1rem 1.25rem',
                         background: 'white',
                         minWidth: '160px',
                         animation: 'float 4s ease-in-out infinite',
+                        zIndex: 10,
+                        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
                     }}>
                         <div style={{ fontSize: '0.875rem', color: 'var(--color-muted-foreground)', marginBottom: '0.25rem' }}>Emotion Detection</div>
                         <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>Active</div>
@@ -193,13 +196,15 @@ export default function Hero() {
                     
                     <div className="card" style={{
                         position: 'absolute',
-                        right: '-2rem',
-                        bottom: '20%',
+                        right: '0',
+                        bottom: '18%',
                         padding: '1rem 1.25rem',
                         background: 'white',
                         minWidth: '160px',
                         animation: 'float 5s ease-in-out infinite',
                         animationDelay: '1s',
+                        zIndex: 10,
+                        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
                     }}>
                         <div style={{ fontSize: '0.875rem', color: 'var(--color-muted-foreground)', marginBottom: '0.25rem' }}>AI Analysis</div>
                         <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>Running</div>
