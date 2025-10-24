@@ -36,7 +36,7 @@ export default function Problem() {
     }, []);
 
     return (
-        <section style={{
+        <section id="about" style={{
             padding: '8rem 2rem',
             background: '#ffffff',
             position: 'relative',
