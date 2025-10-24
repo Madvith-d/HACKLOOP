@@ -420,13 +420,4 @@ MIT
 - **Face Detection**: [face-api.js](https://github.com/justadudewhohacks/face-api.js)
 - **Icons**: [Lucide](https://lucide.dev/)
 
-## 📧 Support
-
-For issues or questions:
-- Open a GitHub issue
-- Contact: support@mindmeshplus.com
-- Discord: [Join our community](https://discord.gg/mindmesh)
-
----
-
 Built with ❤️ for mental health awareness
