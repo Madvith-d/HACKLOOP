@@ -19,6 +19,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const TherapistDashboard = lazy(() => import('./pages/therapist/TherapistDashboard'));
 const PatientDetails = lazy(() => import('./pages/therapist/PatientDetails'));
 const VideoCall = lazy(() => import('./pages/VideoCall'));
+const Appointments = lazy(() => import('./pages/Appointments'));
 
 export default function App() {
     return (
@@ -40,6 +41,7 @@ export default function App() {
                             <Route path="/chat" element={<Chat />} />
                             <Route path="/emotion" element={<EmotionTracking />} />
                             <Route path="/therapists" element={<Therapists />} />
+                            <Route path="/appointments" element={<Appointments />} />
                             <Route path="/analytics" element={<Analytics />} />
                             <Route path="/profile" element={<Profile />} />
                             <Route path="/crisis" element={<CrisisSupport />} />

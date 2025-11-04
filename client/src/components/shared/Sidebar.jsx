@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, MessageCircle, Camera, Calendar, BarChart3, User, AlertCircle, LogOut, Menu, X } from 'lucide-react';
+import { Home, MessageCircle, Camera, Calendar, CalendarCheck, BarChart3, User, AlertCircle, LogOut, Menu, X } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export default function Sidebar({ isCollapsed, onToggle }) {
@@ -19,6 +19,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         { path: '/chat', icon: MessageCircle, label: 'AI Chat' },
         { path: '/emotion', icon: Camera, label: 'Emotion Tracking' },
         { path: '/therapists', icon: Calendar, label: 'Therapists' },
+        { path: '/appointments', icon: CalendarCheck, label: 'Appointments' },
         { path: '/analytics', icon: BarChart3, label: 'Analytics' },
         { path: '/profile', icon: User, label: 'Profile' },
         { path: '/crisis', icon: AlertCircle, label: 'Crisis Support' },

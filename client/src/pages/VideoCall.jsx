@@ -13,11 +13,13 @@ export default function VideoCall() {
     const therapySessionId = searchParams.get('therapySessionId');
     const patientId = searchParams.get('patientId');
     const patientName = searchParams.get('patient') || 'Patient';
+    const therapistName = searchParams.get('therapist') || 'Therapist';
     
     const [isAudioEnabled, setIsAudioEnabled] = useState(true);
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
     const [isScreenSharing, setIsScreenSharing] = useState(false);
     const [connectionStatus, setConnectionStatus] = useState('connecting');
+    const [hasRemote, setHasRemote] = useState(false);
     const [callDuration, setCallDuration] = useState(0);
     
     // Emotion tracking state
@@ -104,6 +106,7 @@ export default function VideoCall() {
                 if (remoteVideoRef.current) {
                     remoteVideoRef.current.srcObject = stream;
                 }
+                setHasRemote(true);
             };
 
             service.onConnectionStateChange = (state) => {
@@ -319,7 +322,7 @@ export default function VideoCall() {
             }}>
                 <div>
                     <h2 style={{ color: 'white', fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-                        Session with {patientName}
+                        Session with {user?.role === 'therapist' ? patientName : therapistName}
                     </h2>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <span style={{
@@ -408,7 +411,7 @@ export default function VideoCall() {
                             objectFit: 'cover',
                         }}
                     />
-                    {connectionStatus !== 'connected' && (
+                    {!hasRemote && (
                         <div style={{
                             position: 'absolute',
                             inset: 0,
@@ -421,7 +424,7 @@ export default function VideoCall() {
                         }}>
                             <BrainCircuit size={48} color="rgba(255, 255, 255, 0.3)" />
                             <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '1.125rem' }}>
-                                Waiting for {patientName}...
+                                {user?.role === 'therapist' ? `Waiting for ${patientName}...` : 'Waiting for therapist...'}
                             </p>
                         </div>
                     )}
@@ -437,7 +440,7 @@ export default function VideoCall() {
                         fontSize: '0.875rem',
                         fontWeight: 600,
                     }}>
-                        {patientName}
+                        {user?.role === 'therapist' ? patientName : therapistName}
                     </div>
                 </div>
                 <div style={{
