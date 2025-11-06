@@ -13,6 +13,17 @@ const habitRoutes = require('./routes/habits');
 const app = express();
 const server = http.createServer(app);
 
+// Initialize Postgres schema
+(async () => {
+    try {
+        const db = require('./db');
+        await db.init();
+        console.log('Postgres schema ready');
+    } catch (e) {
+        console.warn('DB init failed:', e?.message || e);
+    }
+})();
+
 const io = socketIo(server, {
     cors: {
         origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'],
@@ -47,6 +58,7 @@ app.use('/api/emotions', emotionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/journal', journalRoutes);
 app.use('/api/habits', habitRoutes);
+app.use('/api/therapist', require('./routes/therapistApplications'));
 
 const rooms = new Map();
 io.on('connection', (socket) => {

@@ -9,24 +9,42 @@ export function AppProvider({ children }) {
     const [sessions, setSessions] = useState([]);
 
     useEffect(() => {
-        // Check for stored auth
+        // Restore auth state and verify token with backend if present
         const storedUser = localStorage.getItem('user');
+        const token = localStorage.getItem('authToken');
         if (storedUser) {
             setUser(JSON.parse(storedUser));
             setIsAuthenticated(true);
         }
+        if (token && !storedUser) {
+            const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+            fetch(`${API_BASE_URL}/api/auth/verify`, {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+            .then(res => res.ok ? res.json() : null)
+            .then(json => {
+                if (json?.user) {
+                    setUser(json.user);
+                    setIsAuthenticated(true);
+                    localStorage.setItem('user', JSON.stringify(json.user));
+                }
+            })
+            .catch(() => {})
+        }
     }, []);
 
-    const login = (userData) => {
+    const login = (userData, token) => {
         setUser(userData);
         setIsAuthenticated(true);
         localStorage.setItem('user', JSON.stringify(userData));
+        if (token) localStorage.setItem('authToken', token);
     };
 
     const logout = () => {
         setUser(null);
         setIsAuthenticated(false);
         localStorage.removeItem('user');
+        localStorage.removeItem('authToken');
     };
 
     const addEmotionRecord = (emotion) => {
@@ -46,7 +64,9 @@ export function AppProvider({ children }) {
             login,
             logout,
             addEmotionRecord,
-            addSession
+            addSession,
+            login,
+            logout
         }}>
             {children}
         </AppContext.Provider>

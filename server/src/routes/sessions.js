@@ -1,102 +1,87 @@
 const express = require('express');
 const router = express.Router();
-const dataStore = require('../utils/dataStore');
+const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 
-router.get('/my-sessions', authMiddleware, (req, res) => {
+router.get('/my-sessions', authMiddleware, async (req, res) => {
     try {
-        const sessions = dataStore.getUserSessions(req.user.id);
-        res.json({ sessions });
+        const rows = (await db.query('select * from sessions where user_id=$1 or therapist_id=$1 order by coalesce(started_at, scheduled_date) desc', [req.user.id])).rows;
+        res.json({ sessions: rows });
     } catch (error) {
         console.error('Error fetching sessions:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
-router.get('/:id', authMiddleware, (req, res) => {
+
+router.get('/:id', authMiddleware, async (req, res) => {
     try {
-        const session = dataStore.getSessionById(req.params.id);
-        if (!session) {
-            return res.status(404).json({ error: 'Session not found' });
-        }
-        if (session.userId !== req.user.id && session.therapistId !== req.user.id) {
+        const row = (await db.query('select * from sessions where id=$1', [req.params.id])).rows[0];
+        if (!row) return res.status(404).json({ error: 'Session not found' });
+        if (row.user_id !== req.user.id && row.therapist_id !== req.user.id) {
             return res.status(403).json({ error: 'Access denied' });
         }
-
-        res.json({ session });
+        res.json({ session: row });
     } catch (error) {
         console.error('Error fetching session:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
-router.patch('/:id', authMiddleware, (req, res) => {
-    try {
-        const session = dataStore.getSessionById(req.params.id);
-        if (!session) {
-            return res.status(404).json({ error: 'Session not found' });
-        }
-        if (session.userId !== req.user.id && session.therapistId !== req.user.id) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-        const { emotionData, status, notes } = req.body;
-        if (emotionData && Array.isArray(emotionData)) {
-            dataStore.addEmotionDataToSession(req.params.id, emotionData);
-        }
-        const updates = {};
-        if (status) updates.status = status;
-        if (notes) updates.notes = notes;
 
-        const updatedSession = dataStore.updateSession(req.params.id, updates);
-        res.json({ session: updatedSession });
+router.patch('/:id', authMiddleware, async (req, res) => {
+    try {
+        const current = (await db.query('select * from sessions where id=$1', [req.params.id])).rows[0];
+        if (!current) return res.status(404).json({ error: 'Session not found' });
+        if (current.user_id !== req.user.id && current.therapist_id !== req.user.id) return res.status(403).json({ error: 'Access denied' });
+        const { emotionData, status, notes } = req.body;
+        let emotionJson = current.emotion_data || [];
+        if (Array.isArray(emotionData) && emotionData.length > 0) {
+            emotionJson = [...emotionJson, ...emotionData];
+        }
+        const upd = await db.query('update sessions set emotion_data=$2::jsonb, status=coalesce($3,status), notes=coalesce($4,notes) where id=$1 returning *', [req.params.id, JSON.stringify(emotionJson), status || null, notes || null]);
+        res.json({ session: upd.rows[0] });
     } catch (error) {
         console.error('Error updating session:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
-router.post('/:id/complete', authMiddleware, (req, res) => {
+
+router.post('/:id/complete', authMiddleware, async (req, res) => {
     try {
-        const session = dataStore.getSessionById(req.params.id);
-        
-        if (!session) {
-            return res.status(404).json({ error: 'Session not found' });
-        }
-        if (session.userId !== req.user.id && session.therapistId !== req.user.id) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
+        const current = (await db.query('select * from sessions where id=$1', [req.params.id])).rows[0];
+        if (!current) return res.status(404).json({ error: 'Session not found' });
+        if (current.user_id !== req.user.id && current.therapist_id !== req.user.id) return res.status(403).json({ error: 'Access denied' });
         const { emotionTimeline, videoCallData, notes } = req.body;
-        if (emotionTimeline && Array.isArray(emotionTimeline)) {
-            dataStore.addEmotionDataToSession(req.params.id, emotionTimeline);
+        let emotionJson = current.emotion_data || [];
+        if (Array.isArray(emotionTimeline) && emotionTimeline.length > 0) {
+            emotionJson = [...emotionJson, ...emotionTimeline];
         }
-        const updatedSession = dataStore.updateSession(req.params.id, {
-            status: 'completed',
-            completedAt: new Date().toISOString(),
-            videoCallData,
-            notes,
-            duration: videoCallData?.duration || 0
-        });
-
-        res.json({ 
-            session: updatedSession,
-            message: 'Session completed successfully'
-        });
+        const upd = await db.query('update sessions set status=$2, completed_at=now(), video_call_data=$3::jsonb, notes=coalesce($4,notes), duration=coalesce($5,duration), emotion_data=$6::jsonb where id=$1 returning *', [
+            req.params.id,
+            'completed',
+            videoCallData ? JSON.stringify(videoCallData) : null,
+            notes || null,
+            (videoCallData && videoCallData.duration) ? videoCallData.duration : null,
+            JSON.stringify(emotionJson)
+        ]);
+        res.json({ session: upd.rows[0], message: 'Session completed successfully' });
     } catch (error) {
         console.error('Error completing session:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
-router.post('/create', authMiddleware, (req, res) => {
+
+router.post('/create', authMiddleware, async (req, res) => {
     try {
         const { therapistId, patientId, roomId } = req.body;
-
-        const session = dataStore.createSession({
-            userId: patientId || req.user.id,
-            therapistId: therapistId || req.user.id,
-            roomId: roomId || `room-${Date.now()}`,
-            status: 'active',
-            startedAt: new Date().toISOString()
-        });
-
-        res.status(201).json({ session });
+        const id = uuidv4();
+        const userId = patientId || req.user.id;
+        const thId = therapistId || req.user.id;
+        await db.query('insert into sessions (id, user_id, therapist_id, room_id, status, started_at) values ($1,$2,$3,$4,$5,now())', [
+            id, userId, thId, roomId || `room-${Date.now()}`, 'active'
+        ]);
+        const row = (await db.query('select * from sessions where id=$1', [id])).rows[0];
+        res.status(201).json({ session: row });
     } catch (error) {
         console.error('Error creating session:', error);
         res.status(500).json({ error: 'Server error' });

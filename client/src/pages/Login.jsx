@@ -6,7 +6,6 @@ import { useApp } from '../context/AppContext';
 export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [role, setRole] = useState('user');
     const [error, setError] = useState('');
     const { login } = useApp();
     const navigate = useNavigate();
@@ -17,7 +16,7 @@ export default function Login() {
         setIsLoaded(true);
     }, []);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -26,22 +25,30 @@ export default function Login() {
             return;
         }
 
-        // Mock login (replace with actual API call)
-        const userData = {
-            id: '1',
-            name: email.split('@')[0],
-            email: email,
-            role: role,
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
-        };
-
-        login(userData);
-        if (role === 'admin') {
-            navigate('/admin');
-        } else if (role === 'therapist') {
-            navigate('/therapist');
-        } else {
-            navigate('/dashboard');
+        try {
+            const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+            const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            if (!res.ok) {
+                const msg = (await res.json())?.error || 'Login failed';
+                setError(msg);
+                return;
+            }
+            const json = await res.json();
+            const { user: userData, token } = json;
+            login(userData, token);
+            if (userData.role === 'admin') {
+                navigate('/admin?login=1');
+            } else if (userData.role === 'therapist') {
+                navigate('/therapist-portal?login=1');
+            } else {
+                navigate('/dashboard?login=1');
+            }
+        } catch (err) {
+            setError('Network error');
         }
     };
 
@@ -324,34 +331,6 @@ export default function Login() {
                         />
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <label htmlFor="role" style={{
-                            color: 'var(--color-foreground)',
-                            fontSize: '0.875rem',
-                            fontWeight: 600,
-                        }}>
-                            Login as
-                        </label>
-                        <select
-                            id="role"
-                            value={role}
-                            onChange={(e) => setRole(e.target.value)}
-                            style={{
-                                padding: '0.75rem 1rem',
-                                background: 'var(--color-background)',
-                                border: '1px solid hsl(var(--border))',
-                                borderRadius: '0.5rem',
-                                fontSize: '0.95rem',
-                                transition: 'all 0.2s',
-                                outline: 'none',
-                                cursor: 'pointer',
-                            }}
-                        >
-                            <option value="user">User</option>
-                            <option value="therapist">Therapist</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
 
                     <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
                         Sign In

@@ -18,7 +18,7 @@ export default function Signup() {
         setIsLoaded(true);
     }, []);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
 
@@ -37,16 +37,25 @@ export default function Signup() {
             return;
         }
 
-        // Mock signup (replace with actual API call)
-        const userData = {
-            id: Date.now().toString(),
-            name: name,
-            email: email,
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`
-        };
-
-        login(userData);
-        navigate('/dashboard');
+        try {
+            const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+            const res = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, email, password })
+            });
+            if (!res.ok) {
+                const msg = (await res.json())?.error || 'Signup failed';
+                setError(msg);
+                return;
+            }
+            const json = await res.json();
+            const { user: userData, token } = json;
+            login(userData, token);
+            navigate('/dashboard');
+        } catch (err) {
+            setError('Network error');
+        }
     };
 
     return (

@@ -20,7 +20,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
         { path: '/emotion', icon: Camera, label: 'Emotion Tracking' },
         { path: '/journal', icon: BookOpen, label: 'Journal' },
         { path: '/habits', icon: CheckSquare, label: 'Habits' },
-        { path: '/therapists', icon: Calendar, label: 'Therapists' },
+        { path: '/therapists', icon: Calendar, label: 'Find Therapists' },
         { path: '/appointments', icon: CalendarCheck, label: 'Appointments' },
         { path: '/analytics', icon: BarChart3, label: 'Analytics' },
         { path: '/profile', icon: User, label: 'Profile' },
@@ -29,10 +29,11 @@ export default function Sidebar({ isCollapsed, onToggle }) {
     
     const adminNavItems = [
         { path: '/admin', icon: Home, label: 'Admin Dashboard' },
+        { path: '/admin/applications', icon: Calendar, label: 'Applications' },
         { path: '/profile', icon: User, label: 'Profile' },
     ];
     const therapistNavItems = [
-        { path: '/therapist', icon: Home, label: 'Therapist Dashboard' },
+        { path: '/therapist-portal', icon: Home, label: 'Therapist Portal' },
         { path: '/analytics', icon: BarChart3, label: 'Analytics' },
         { path: '/profile', icon: User, label: 'Profile' },
     ];

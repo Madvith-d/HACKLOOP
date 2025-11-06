@@ -5,6 +5,7 @@ import { Users, Calendar, Clock, TrendingUp, Video, FileText, Search } from 'luc
 export default function TherapistDashboard() {
     const navigate = useNavigate();
     const [selectedFilter, setSelectedFilter] = useState('all');
+    const [showBanner] = useState(() => new URLSearchParams(window.location.search).get('login') === '1');
 
     const stats = [
         { label: 'Active Patients', value: '24', change: '+3', icon: Users, color: '#667eea' },
@@ -84,6 +85,11 @@ export default function TherapistDashboard() {
                 <div>
                     <h1>Therapist Dashboard</h1>
                     <p>Manage your patients and sessions</p>
+                    {showBanner && (
+                        <div className="card" style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 8 }}>
+                            Logged in as Therapist
+                        </div>
+                    )}
                 </div>
             </header>
 

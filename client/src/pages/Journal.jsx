@@ -190,7 +190,7 @@ export default function Journal() {
                 <div className="dashboard-section">
                     <h2>Entries</h2>
                     <div className="card" style={{ padding: '0.75rem', marginBottom: '0.75rem' }}>
-                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                             <Calendar size={18} />
                             <input type="date" value={filter.from} onChange={(e) => setFilter({ ...filter, from: e.target.value })} />
                             <span>→</span>

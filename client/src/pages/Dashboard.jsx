@@ -33,6 +33,11 @@ export default function Dashboard() {
                 <div>
                     <h1>Welcome back, {user?.name}! 👋</h1>
                     <p>Here's your mental wellness overview</p>
+                    {new URLSearchParams(window.location.search).get('login') === '1' && (
+                        <div className="card" style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 8 }}>
+                            Logged in successfully
+                        </div>
+                    )}
                 </div>
             </header>
 

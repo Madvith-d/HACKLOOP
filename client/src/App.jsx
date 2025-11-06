@@ -16,6 +16,7 @@ const Analytics = lazy(() => import('./pages/Analytics'));
 const Profile = lazy(() => import('./pages/Profile'));
 const CrisisSupport = lazy(() => import('./pages/CrisisSupport'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminApplications = lazy(() => import('./pages/admin/AdminApplications'));
 const TherapistDashboard = lazy(() => import('./pages/therapist/TherapistDashboard'));
 const PatientDetails = lazy(() => import('./pages/therapist/PatientDetails'));
 const VideoCall = lazy(() => import('./pages/VideoCall'));
@@ -23,6 +24,7 @@ const Appointments = lazy(() => import('./pages/Appointments'));
 const Journal = lazy(() => import('./pages/Journal'));
 const Habits = lazy(() => import('./pages/Habits'));
 const HabitDetail = lazy(() => import('./pages/HabitDetail'));
+const TherapistSignup = lazy(() => import('./pages/TherapistSignup'));
 
 export default function App() {
     return (
@@ -34,6 +36,7 @@ export default function App() {
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<Signup />} />
                         <Route path="/video-call" element={<VideoCall />} />
+                        <Route path="/therapist-signup" element={<TherapistSignup />} />
                         
                         <Route element={
                             <ProtectedRoute>
@@ -51,9 +54,10 @@ export default function App() {
                             <Route path="/profile" element={<Profile />} />
                             <Route path="/crisis" element={<CrisisSupport />} />
                             <Route path="/habits/:id" element={<HabitDetail />} />
-                            <Route path="/admin" element={<AdminDashboard />} />
-                            <Route path="/therapist" element={<TherapistDashboard />} />
-                            <Route path="/therapist/patient/:patientId" element={<PatientDetails />} />
+                            <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+                            <Route path="/admin/applications" element={<ProtectedRoute allowedRoles={['admin']}><AdminApplications /></ProtectedRoute>} />
+                            <Route path="/therapist-portal" element={<ProtectedRoute allowedRoles={['therapist']}><TherapistDashboard /></ProtectedRoute>} />
+                            <Route path="/therapist-portal/patient/:patientId" element={<ProtectedRoute allowedRoles={['therapist']}><PatientDetails /></ProtectedRoute>} />
                         </Route>
                         
                         <Route path="*" element={<Navigate to="/" replace />} />
