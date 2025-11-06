@@ -8,6 +8,8 @@ const therapistRoutes = require('./routes/therapists');
 const sessionRoutes = require('./routes/sessions');
 const emotionRoutes = require('./routes/emotions');
 const userRoutes = require('./routes/users');
+const journalRoutes = require('./routes/journal');
+const habitRoutes = require('./routes/habits');
 const app = express();
 const server = http.createServer(app);
 
@@ -43,6 +45,8 @@ app.use('/api/therapists', therapistRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/emotions', emotionRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/journal', journalRoutes);
+app.use('/api/habits', habitRoutes);
 
 const rooms = new Map();
 io.on('connection', (socket) => {

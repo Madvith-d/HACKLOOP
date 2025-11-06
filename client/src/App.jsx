@@ -20,6 +20,9 @@ const TherapistDashboard = lazy(() => import('./pages/therapist/TherapistDashboa
 const PatientDetails = lazy(() => import('./pages/therapist/PatientDetails'));
 const VideoCall = lazy(() => import('./pages/VideoCall'));
 const Appointments = lazy(() => import('./pages/Appointments'));
+const Journal = lazy(() => import('./pages/Journal'));
+const Habits = lazy(() => import('./pages/Habits'));
+const HabitDetail = lazy(() => import('./pages/HabitDetail'));
 
 export default function App() {
     return (
@@ -42,9 +45,12 @@ export default function App() {
                             <Route path="/emotion" element={<EmotionTracking />} />
                             <Route path="/therapists" element={<Therapists />} />
                             <Route path="/appointments" element={<Appointments />} />
+                            <Route path="/journal" element={<Journal />} />
+                            <Route path="/habits" element={<Habits />} />
                             <Route path="/analytics" element={<Analytics />} />
                             <Route path="/profile" element={<Profile />} />
                             <Route path="/crisis" element={<CrisisSupport />} />
+                            <Route path="/habits/:id" element={<HabitDetail />} />
                             <Route path="/admin" element={<AdminDashboard />} />
                             <Route path="/therapist" element={<TherapistDashboard />} />
                             <Route path="/therapist/patient/:patientId" element={<PatientDetails />} />
