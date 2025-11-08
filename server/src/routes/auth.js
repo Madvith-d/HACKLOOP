@@ -4,15 +4,14 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
+const { validateSignup, validateLogin } = require('../middleware/validate');
+const logger = require('../utils/logger');
 
 // Signup
-router.post('/signup', async (req, res) => {
+router.post('/signup', validateSignup, async (req, res, next) => {
     try {
         const { name, email, password, role } = req.body;
 
-        if (!name || !email || !password) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
         const existing = await db.query('select 1 from users where email=$1', [email]);
         if (existing.rowCount > 0) {
             return res.status(400).json({ error: 'User already exists' });
@@ -27,24 +26,22 @@ router.post('/signup', async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );
+        logger.info('User signed up:', { id, email, role: roleFinal });
         res.status(201).json({
             user: { id, name, email, role: roleFinal, avatar },
             token
         });
     } catch (error) {
-        console.error('Signup error:', error);
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Signup error:', error);
+        next(error);
     }
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', validateLogin, async (req, res, next) => {
     try {
         const { email, password, role } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Missing required fields' });
-        }
         const sel = await db.query('select id, name, email, password_hash, role, avatar from users where email=$1', [email]);
         if (sel.rowCount === 0) return res.status(401).json({ error: 'Invalid credentials' });
         const row = sel.rows[0];
@@ -56,16 +53,18 @@ router.post('/login', async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: '7d' }
         );
+        logger.info('User logged in:', { id: row.id, email: row.email, role: row.role });
         res.json({
             user: { id: row.id, name: row.name, email: row.email, role: row.role, avatar: row.avatar },
             token
         });
     } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Login error:', error);
+        next(error);
     }
 });
-router.get('/verify', async (req, res) => {
+
+router.get('/verify', async (req, res, next) => {
     try {
         const token = req.headers.authorization?.replace('Bearer ', '');
         
@@ -78,7 +77,8 @@ router.get('/verify', async (req, res) => {
         if (sel.rowCount === 0) return res.status(404).json({ error: 'User not found' });
         res.json({ user: sel.rows[0] });
     } catch (error) {
-        res.status(401).json({ error: 'Invalid token' });
+        logger.error('Token verification error:', error);
+        next(error);
     }
 });
 

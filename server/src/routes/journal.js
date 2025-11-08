@@ -1,36 +1,42 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
+const { validateJournalEntry, validateUUID } = require('../middleware/validate');
+const errorHandler = require('../middleware/errorHandler');
+const logger = require('../utils/logger');
 
 const db = require('../db');
 
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, async (req, res, next) => {
     try {
         const { from, to } = req.query;
         const params = [req.user.id];
         let where = 'where user_id = $1';
-        if (from) { params.push(from); where += ` and created_at >= $${params.length}`; }
-        if (to) { params.push(to); where += ` and created_at <= $${params.length}`; }
+        if (from) { params.push(from); where += ` and created_at >= ${params.length}`; }
+        if (to) { params.push(to); where += ` and created_at <= ${params.length}`; }
         const q = `select id, user_id as "userId", title, content, mood, tags, created_at as "createdAt", updated_at as "updatedAt" from journals ${where} order by created_at desc`;
         const rows = (await db.query(q, params)).rows;
         res.json({ entries: rows });
     } catch (e) {
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Journal fetch error:', e);
+        next(e);
     }
 });
 
-router.get('/:id', authMiddleware, async (req, res) => {
-    const row = (await db.query('select id, user_id as "userId", title, content, mood, tags, created_at as "createdAt", updated_at as "updatedAt" from journals where id=$1 and user_id=$2', [req.params.id, req.user.id])).rows[0];
-    if (!row) return res.status(404).json({ error: 'Not found' });
-    res.json({ entry: row });
+router.get('/:id', authMiddleware, validateUUID, async (req, res, next) => {
+    try {
+        const row = (await db.query('select id, user_id as "userId", title, content, mood, tags, created_at as "createdAt", updated_at as "updatedAt" from journals where id=$1 and user_id=$2', [req.params.id, req.user.id])).rows[0];
+        if (!row) return res.status(404).json({ error: 'Not found' });
+        res.json({ entry: row });
+    } catch (e) {
+        logger.error('Journal fetch by ID error:', e);
+        next(e);
+    }
 });
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, validateJournalEntry, async (req, res, next) => {
     try {
         const { title, content, mood, tags } = req.body;
-        if (!content && !title) {
-            return res.status(400).json({ error: 'Title or content is required' });
-        }
         const { v4: uuidv4 } = require('uuid');
         const id = uuidv4();
         const now = new Date();
@@ -38,11 +44,12 @@ router.post('/', authMiddleware, async (req, res) => {
         const row = (await db.query('select id, user_id as "userId", title, content, mood, tags, created_at as "createdAt", updated_at as "updatedAt" from journals where id=$1', [id])).rows[0];
         res.status(201).json({ entry: row });
     } catch (e) {
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Journal creation error:', e);
+        next(e);
     }
 });
 
-router.patch('/:id', authMiddleware, async (req, res) => {
+router.patch('/:id', authMiddleware, validateUUID, async (req, res, next) => {
     try {
         const { title, content, mood, tags } = req.body;
         const now = new Date();
@@ -50,17 +57,19 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         if (upd.rowCount === 0) return res.status(404).json({ error: 'Not found' });
         res.json({ entry: upd.rows[0] });
     } catch (e) {
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Journal update error:', e);
+        next(e);
     }
 });
 
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, validateUUID, async (req, res, next) => {
     try {
         const del = await db.query('delete from journals where id=$1 and user_id=$2', [req.params.id, req.user.id]);
         if (del.rowCount === 0) return res.status(404).json({ error: 'Not found' });
         res.json({ success: true });
     } catch (e) {
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Journal deletion error:', e);
+        next(e);
     }
 });
 
