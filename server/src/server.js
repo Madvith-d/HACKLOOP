@@ -10,8 +10,10 @@ const emotionRoutes = require('./routes/emotions');
 const userRoutes = require('./routes/users');
 const journalRoutes = require('./routes/journal');
 const habitRoutes = require('./routes/habits');
+const chatRoutes = require('./routes/chat');
 const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
+const therapistNotification = require('./utils/therapistNotification');
 const app = express();
 const server = http.createServer(app);
 
@@ -33,6 +35,8 @@ const io = socketIo(server, {
         credentials: true
     }
 });
+
+therapistNotification.setIoInstance(io);
 app.use(cors({
     origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'],
     credentials: true
@@ -64,6 +68,7 @@ app.use('/api/emotions', emotionRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/journal', journalRoutes);
 app.use('/api/habits', habitRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api/therapist', require('./routes/therapistApplications'));
 
 const rooms = new Map();

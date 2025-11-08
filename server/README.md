@@ -13,6 +13,10 @@ A full-featured backend API for the MindMesh+ mental health platform.
 - **Comprehensive Logging**: Structured logging with Winston
 - **Input Validation**: Request validation with express-validator
 - **Error Handling**: Centralized error handling middleware
+- **AI Chat Agent**: Empathetic chat system with emotional analysis using LangGraph and LangChain
+- **Vector Embeddings**: Semantic search using local or Pinecone vector storage
+- **Crisis Detection**: Automatic therapist alerts for critical situations
+- **Personalized Recommendations**: Smart suggestions for journaling, habit building, or therapy
 
 ## Tech Stack
 
@@ -22,6 +26,9 @@ A full-featured backend API for the MindMesh+ mental health platform.
 - **Socket.io** for WebRTC signaling
 - **Winston** for logging
 - **express-validator** for input validation
+- **LangChain** and **LangGraph** for AI agent orchestration
+- **Vector Storage**: Local JSON files or Pinecone
+- **Embeddings**: Sentence transformers with fallback implementation
 
 ## Getting Started
 
@@ -82,6 +89,13 @@ The server will start on `http://localhost:4000` (or the port specified in `PORT
 - `POST /api/emotions/bulk` - Record multiple emotions
 - `GET /api/emotions/analytics` - Get emotion analytics
 
+### Chat (AI Agent)
+- `POST /api/chat/message` - Send a chat message and get AI response
+- `POST /api/chat/stream` - Stream chat processing with real-time updates
+- `GET /api/chat/history` - Get chat message history
+- `GET /api/chat/analysis/:chatId` - Get detailed analysis of a chat message
+- `GET /api/chat/agent-info` - Get AI agent information
+
 ### Health Check
 - `GET /health` - Server health status
 
@@ -96,6 +110,9 @@ The application uses PostgreSQL with the following main tables:
 - `therapists` - Therapist profiles
 - `bookings` - Therapy session bookings
 - `sessions` - Video consultation sessions
+- `chat_messages` - AI chat conversations with emotional analysis
+- `therapist_alerts` - Crisis alerts and notifications
+- `vector_metadata` - Embedding metadata and tracking
 
 ## Environment Variables
 
@@ -121,18 +138,27 @@ LOG_LEVEL=info
 
 ```
 src/
+├── ai/
+│   ├── agent.js         # Main empathetic chat agent
+│   ├── nodes.js         # Individual agent processing nodes
+│   ├── state.js         # Agent state management
+│   └── recommendations.js # Recommendation engine
 ├── middleware/
 │   ├── auth.js          # JWT authentication middleware
 │   ├── validate.js      # Input validation middleware
 │   └── errorHandler.js  # Centralized error handling
 ├── routes/
 │   ├── auth.js          # Authentication routes
+│   ├── chat.js          # AI chat endpoints
 │   ├── journal.js       # Journal management
 │   ├── habits.js        # Habit tracking
 │   ├── emotions.js      # Emotion tracking
 │   └── ...             # Other feature routes
 ├── utils/
-│   └── logger.js        # Winston logger configuration
+│   ├── logger.js        # Winston logger configuration
+│   ├── embeddings.js    # Embedding generation service
+│   ├── vectorStore.js   # Vector storage (local/Pinecone)
+│   └── therapistNotification.js # Alert management
 ├── db.js               # PostgreSQL connection and schema
 └── server.js           # Main server entry point
 ```
@@ -145,6 +171,42 @@ The server includes:
 - Centralized error handling
 - JWT-based authentication
 - WebRTC signaling for video calls
+- Advanced AI chat agent with emotional intelligence
+- Vector embedding generation and semantic search
+- Automatic crisis detection and therapist alerts
+- Streaming chat responses for real-time interaction
+
+## AI Agent Features
+
+### Emotional Analysis
+The agent analyzes messages for:
+- Emotion scores (sadness, anxiety, anger, fear, joy, hopelessness)
+- Sentiment analysis
+- Crisis indicators
+- Emotional keywords
+
+### Smart Recommendations
+Based on emotional state, the agent recommends:
+- **Journaling** - For processing emotions
+- **Habit Building** - For stress management and coping
+- **Therapy Sessions** - For professional support
+- **Crisis Support** - For immediate intervention
+
+### Context Awareness
+The agent leverages:
+- User's journal history
+- Active habits and streaks
+- Recent emotional patterns
+- Semantic similarity to past entries
+- Therapy session data
+
+### Vector Embeddings
+- Semantic search through user's history
+- Find similar emotional patterns
+- Store locally or in Pinecone
+- Enable intelligent context retrieval
+
+For detailed AI documentation, see [AI_AGENT_DOCUMENTATION.md](./AI_AGENT_DOCUMENTATION.md)
 
 ## Contributing
 
