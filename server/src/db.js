@@ -159,6 +159,35 @@ async function init() {
     context text,
     timestamp timestamptz not null default now()
   );
+
+  create table if not exists chat_messages (
+    id uuid primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    user_message text not null,
+    agent_response text,
+    emotional_analysis jsonb,
+    recommendation jsonb,
+    created_at timestamptz not null default now()
+  );
+
+  create table if not exists therapist_alerts (
+    id uuid primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    severity text not null,
+    message text not null,
+    details jsonb,
+    read boolean not null default false,
+    created_at timestamptz not null default now()
+  );
+
+  create table if not exists vector_metadata (
+    id uuid primary key,
+    user_id uuid not null references users(id) on delete cascade,
+    content_type text,
+    source_id uuid,
+    embedding_metadata jsonb,
+    created_at timestamptz not null default now()
+  );
   `);
 
   // Ensure therapists.user_id exists
