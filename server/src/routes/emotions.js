@@ -2,35 +2,37 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const authMiddleware = require('../middleware/auth');
+const { validateEmotionEntry } = require('../middleware/validate');
+const logger = require('../utils/logger');
 const { v4: uuidv4 } = require('uuid');
 
-router.get('/my-emotions', authMiddleware, async (req, res) => {
+router.get('/my-emotions', authMiddleware, async (req, res, next) => {
     try {
         const emotions = (await db.query('select id, user_id as "userId", emotion, confidence, notes, context, timestamp from emotions where user_id=$1 order by timestamp desc', [req.user.id])).rows;
         res.json({ emotions });
     } catch (error) {
-        console.error('Error fetching emotions:', error);
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Error fetching emotions:', error);
+        next(error);
     }
 });
 
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, validateEmotionEntry, async (req, res, next) => {
     try {
         const { emotion, confidence, notes, context } = req.body;
-        if (!emotion) return res.status(400).json({ error: 'Emotion is required' });
         const id = uuidv4();
         await db.query('insert into emotions (id, user_id, emotion, confidence, notes, context) values ($1,$2,$3,$4,$5,$6)', [
             id, req.user.id, emotion, confidence ?? null, notes || '', context || 'manual'
         ]);
         const row = (await db.query('select id, user_id as "userId", emotion, confidence, notes, context, timestamp from emotions where id=$1', [id])).rows[0];
+        logger.info('Emotion recorded:', { userId: req.user.id, emotion, confidence });
         res.status(201).json({ emotion: row, message: 'Emotion recorded successfully' });
     } catch (error) {
-        console.error('Error creating emotion:', error);
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Error creating emotion:', error);
+        next(error);
     }
 });
 
-router.post('/bulk', authMiddleware, async (req, res) => {
+router.post('/bulk', authMiddleware, async (req, res, next) => {
     try {
         const { emotions } = req.body;
         if (!emotions || !Array.isArray(emotions)) {
@@ -44,14 +46,15 @@ router.post('/bulk', authMiddleware, async (req, res) => {
             ]);
             count++;
         }
+        logger.info('Bulk emotions recorded:', { userId: req.user.id, count });
         res.status(201).json({ count, message: 'Emotions recorded successfully' });
     } catch (error) {
-        console.error('Error creating emotions:', error);
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Error creating emotions:', error);
+        next(error);
     }
 });
 
-router.get('/analytics', authMiddleware, async (req, res) => {
+router.get('/analytics', authMiddleware, async (req, res, next) => {
     try {
         const rows = (await db.query('select emotion, confidence from emotions where user_id=$1', [req.user.id])).rows;
         const emotionCounts = {};
@@ -73,8 +76,8 @@ router.get('/analytics', authMiddleware, async (req, res) => {
             recentEmotions
         });
     } catch (error) {
-        console.error('Error fetching analytics:', error);
-        res.status(500).json({ error: 'Server error' });
+        logger.error('Error fetching analytics:', error);
+        next(error);
     }
 });
 
