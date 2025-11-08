@@ -2,12 +2,69 @@ const { Pool } = require('pg');
 
 const connectionString = process.env.DATABASE_URL;
 
+/**
+ * Detects if the connection string is for Neon DB
+ * @param {string} url - Connection string or hostname
+ * @returns {boolean}
+ */
+function isNeonDB(url) {
+  if (!url) return false;
+  return url.includes('neon.tech') || url.includes('neon');
+}
+
+/**
+ * Parses SSL mode from connection string query parameters
+ * @param {URL} url - Parsed URL object
+ * @returns {string|null} - SSL mode value or null
+ */
+function parseSslMode(url) {
+  if (!url.searchParams) return null;
+  return url.searchParams.get('sslmode');
+}
+
+/**
+ * Builds SSL configuration based on provider and settings
+ * @param {boolean} isNeon - Whether this is a Neon DB connection
+ * @param {string|null} sslMode - SSL mode from connection string
+ * @param {boolean} pgSslEnv - PGSSL environment variable value
+ * @returns {object|undefined} - SSL configuration object
+ */
+function buildSslConfig(isNeon, sslMode, pgSslEnv) {
+  // Neon DB requires SSL - force enable if Neon detected
+  if (isNeon) {
+    // If sslmode=require in connection string, use secure SSL
+    if (sslMode === 'require') {
+      return { rejectUnauthorized: true };
+    }
+    // Default for Neon: use SSL with certificate validation
+    return { rejectUnauthorized: true };
+  }
+
+  // For non-Neon connections, respect PGSSL env var
+  if (pgSslEnv === 'true') {
+    return { rejectUnauthorized: false };
+  }
+
+  // If sslmode is explicitly set in connection string, use it
+  if (sslMode === 'require') {
+    return { rejectUnauthorized: true };
+  }
+
+  return undefined;
+}
+
 function buildPgConfig() {
-  const useSsl = process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : undefined;
+  const pgSslEnv = process.env.PGSSL === 'true';
+  let sslConfig = undefined;
+  let isNeon = false;
 
   if (connectionString) {
     try {
       const u = new URL(connectionString);
+      isNeon = isNeonDB(u.hostname) || isNeonDB(connectionString);
+      const sslMode = parseSslMode(u);
+      sslConfig = buildSslConfig(isNeon, sslMode, pgSslEnv);
+
       const hasPassword = typeof u.password === 'string' && u.password.length > 0;
 
       if (!hasPassword) {
@@ -21,7 +78,7 @@ function buildPgConfig() {
             user: process.env.PGUSER || (u.username ? decodeURIComponent(u.username) : 'postgres'),
             password: envPwd,
             database: process.env.PGDATABASE || (u.pathname ? u.pathname.replace(/^\//, '') : 'mindmesh'),
-            ssl: useSsl
+            ssl: sslConfig
           };
         }
         if (process.env.PG_ALLOW_PASSWORDLESS === 'true') {
@@ -34,25 +91,30 @@ function buildPgConfig() {
             // (server may still reject if it requires a real password)
             password: process.env.PGPASSWORD ?? '',
             database: process.env.PGDATABASE || (u.pathname ? u.pathname.replace(/^\//, '') : 'mindmesh'),
-            ssl: useSsl
+            ssl: sslConfig
           };
         }
         // Emit a clear message early instead of the generic SCRAM error from pg
         throw new Error('DATABASE_URL is set but has no password. Set PGPASSWORD env var or include password in DATABASE_URL (postgres://user:pass@host:port/db). To intentionally allow passwordless, set PG_ALLOW_PASSWORDLESS=true (requires server trust/peer auth).');
       }
-      return { connectionString, ssl: useSsl };
+      return { connectionString, ssl: sslConfig };
     } catch (e) {
       // If URL parsing fails, fall back to discrete env vars below
     }
   }
 
+  // Check if using discrete env vars with Neon hostname
+  const hostname = process.env.PGHOST || 'localhost';
+  isNeon = isNeonDB(hostname);
+  sslConfig = buildSslConfig(isNeon, null, pgSslEnv);
+
   return {
-    host: process.env.PGHOST || 'localhost',
+    host: hostname,
     port: parseInt(process.env.PGPORT || '5432', 10),
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD || '',
     database: process.env.PGDATABASE || 'mindmesh',
-    ssl: useSsl
+    ssl: sslConfig
   };
 }
 
