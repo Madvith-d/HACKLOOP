@@ -1,42 +1,75 @@
-const MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
+const logger = require('./logger');
 
-function hashFallback(text, dim = 128) {
-  // Deterministic cheap embedding fallback if no API key.
-  const vec = new Array(dim).fill(0);
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    const idx = c % dim;
-    vec[idx] = (vec[idx] + (c % 13) + 1) % 1000;
+class EmbeddingService {
+  constructor() {
+    this.model = null;
+    this.initialized = false;
   }
-  // L2 normalize
-  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0)) || 1;
-  return vec.map(v => v / norm);
+
+  async initialize() {
+    try {
+      if (this.initialized) return;
+      
+      const nodeEmbedding = require('node-embedding');
+      this.model = new nodeEmbedding.SentenceTransformer('Xenova/all-MiniLM-L6-v2');
+      this.initialized = true;
+      logger.info('Embedding model initialized successfully');
+    } catch (error) {
+      logger.warn('Failed to load transformer model, using fallback embedding method:', error.message);
+      this.initialized = true;
+    }
+  }
+
+  async generateEmbedding(text) {
+    try {
+      await this.initialize();
+      
+      if (this.model) {
+        const embeddings = await this.model.embed(text);
+        return embeddings;
+      } else {
+        return this.fallbackEmbedding(text);
+      }
+    } catch (error) {
+      logger.error('Error generating embedding:', error);
+      return this.fallbackEmbedding(text);
+    }
+  }
+
+  fallbackEmbedding(text) {
+    const words = text.toLowerCase().split(/\s+/);
+    const embedding = new Array(384).fill(0);
+    
+    for (const word of words) {
+      let hash = 0;
+      for (let i = 0; i < word.length; i++) {
+        const char = word.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+      }
+      const index = Math.abs(hash) % 384;
+      embedding[index] += 1 / words.length;
+    }
+    
+    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+    if (magnitude > 0) {
+      for (let i = 0; i < embedding.length; i++) {
+        embedding[i] /= magnitude;
+      }
+    }
+    
+    return embedding;
+  }
+
+  async generateBatchEmbeddings(texts) {
+    try {
+      await this.initialize();
+      return Promise.all(texts.map(text => this.generateEmbedding(text)));
+    } catch (error) {
+      logger.error('Error generating batch embeddings:', error);
+      return texts.map(text => this.fallbackEmbedding(text));
+    }
+  }
 }
 
-async function embedText(text) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const payload = {
-    input: text || '',
-    model: MODEL,
-  };
-  if (!apiKey) {
-    return { vector: hashFallback(text || '') , dim: 128, model: 'fallback-hash-128' };
-  }
-  const res = await fetch('https://api.openai.com/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) {
-    // Fallback on failure to keep app usable
-    return { vector: hashFallback(text || '') , dim: 128, model: 'fallback-hash-128' };
-  }
-  const json = await res.json();
-  const vector = json?.data?.[0]?.embedding || [];
-  return { vector, dim: vector.length, model: payload.model };
-}
-
-module.exports = { embedText };
+module.exports = new EmbeddingService();
