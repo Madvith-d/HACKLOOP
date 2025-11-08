@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, Suspense } from 'react';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, AlertCircle, BookOpen, Target, Users, Loader2 } from 'lucide-react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF, Html } from '@react-three/drei';
 import { useApp } from '../context/AppContext';
+import { chatAPI } from '../utils/api';
 import * as THREE from 'three';
 
 function RealisticAvatar({ isSpeaking }) {
@@ -600,6 +601,8 @@ export default function Chat() {
     const [audioLevel, setAudioLevel] = useState(0);
     const [showShortcuts, setShowShortcuts] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [error, setError] = useState(null);
+    const [loadingHistory, setLoadingHistory] = useState(true);
     const recognitionRef = useRef(null);
     const synthRef = useRef(window.speechSynthesis);
     const messagesEndRef = useRef(null);
@@ -608,7 +611,75 @@ export default function Chat() {
     const textInputRef = useRef(null);
     const { user } = useApp();
 
+    const sendMessageToAPI = async (userMessage) => {
+        try {
+            setError(null);
+            const response = await chatAPI.sendMessage(userMessage);
+            
+            return {
+                response: response.response,
+                emotionalAnalysis: response.emotionalAnalysis,
+                recommendation: response.recommendation,
+                therapistAlert: response.therapistAlert,
+                chatId: response.chatId,
+            };
+        } catch (error) {
+            console.error('Error sending message:', error);
+            setError(error.message || 'Failed to send message. Please try again.');
+            throw error;
+        }
+    };
+
     useEffect(() => {
+        // Load chat history on mount
+        const loadChatHistory = async () => {
+            try {
+                setLoadingHistory(true);
+                const token = localStorage.getItem('authToken');
+                if (!token) {
+                    setLoadingHistory(false);
+                    return;
+                }
+
+                const history = await chatAPI.getHistory(50, 0);
+                if (history.messages && history.messages.length > 0) {
+                    // Convert backend messages to conversation format
+                    const formattedMessages = history.messages.flatMap(msg => [
+                        { 
+                            role: 'user', 
+                            content: msg.user_message, 
+                            timestamp: new Date(msg.created_at),
+                            id: msg.id,
+                            emotionalAnalysis: msg.emotional_analysis,
+                            recommendation: msg.recommendation,
+                        },
+                        { 
+                            role: 'ai', 
+                            content: msg.agent_response, 
+                            timestamp: new Date(msg.created_at),
+                            id: msg.id,
+                            emotionalAnalysis: msg.emotional_analysis,
+                            recommendation: msg.recommendation,
+                        }
+                    ]).sort((a, b) => a.timestamp - b.timestamp);
+                    
+                    setConversation(formattedMessages);
+                    if (formattedMessages.length > 0) {
+                        const lastMessage = formattedMessages[formattedMessages.length - 1];
+                        setAvatarText(lastMessage.content);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+                setError('Failed to load chat history');
+            } finally {
+                setLoadingHistory(false);
+            }
+        };
+
+        loadChatHistory();
+
+        // Setup speech recognition
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             recognitionRef.current = new SpeechRecognition();
@@ -616,10 +687,38 @@ export default function Chat() {
             recognitionRef.current.interimResults = false;
             recognitionRef.current.lang = 'en-US';
 
-            recognitionRef.current.onresult = (event) => {
+            recognitionRef.current.onresult = async (event) => {
                 const speechResult = event.results[0][0].transcript;
                 setTranscript(speechResult);
-                handleUserSpeech(speechResult);
+                // Call handleUserSpeech directly
+                const userMsg = { role: 'user', content: speechResult, timestamp: new Date() };
+                setConversation(prev => [...prev, userMsg]);
+                
+                setIsTyping(true);
+                
+                try {
+                    const result = await sendMessageToAPI(speechResult);
+                    const aiMsg = { 
+                        role: 'ai', 
+                        content: result.response, 
+                        timestamp: new Date(),
+                        emotionalAnalysis: result.emotionalAnalysis,
+                        recommendation: result.recommendation,
+                        therapistAlert: result.therapistAlert,
+                    };
+                    setIsTyping(false);
+                    setConversation(prev => [...prev, aiMsg]);
+                    setAvatarText(result.response);
+                    speak(result.response);
+                    
+                    if (result.therapistAlert) {
+                        setTimeout(() => {
+                            alert('⚠️ A therapist has been notified based on your message. Help is available.');
+                        }, 1000);
+                    }
+                } catch (error) {
+                    setIsTyping(false);
+                }
             };
 
             recognitionRef.current.onerror = (event) => {
@@ -637,25 +736,7 @@ export default function Chat() {
                 recognitionRef.current.stop();
             }
         };
-    }, []);
-
-    const generateAIResponse = (userMessage) => {
-        const lowerMessage = userMessage.toLowerCase();
-        
-        if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety')) {
-            return "I understand you're feeling anxious. Remember, anxiety is a natural response. Let's try some deep breathing together. Breathe in slowly for 4 counts, hold for 4, and exhale for 4. You're doing great.";
-        } else if (lowerMessage.includes('stress') || lowerMessage.includes('stressed')) {
-            return "Stress can be overwhelming. Have you tried breaking down your tasks into smaller, manageable steps? Sometimes just talking about what's stressing you can help lighten the load.";
-        } else if (lowerMessage.includes('sad') || lowerMessage.includes('down')) {
-            return "I'm here for you. It's okay to feel sad sometimes. Your feelings are valid. Would you like to talk about what's making you feel this way?";
-        } else if (lowerMessage.includes('happy') || lowerMessage.includes('good') || lowerMessage.includes('great')) {
-            return "That's wonderful to hear! I'm so glad you're feeling good. What's been bringing you joy lately?";
-        } else if (lowerMessage.includes('help') || lowerMessage.includes('need')) {
-            return "I'm here to help you. Tell me what's on your mind, and we'll work through it together. Remember, seeking help is a sign of strength.";
-        } else {
-            return "Thank you for sharing that with me. Your feelings matter. Can you tell me more about how you're feeling right now?";
-        }
-    };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
     const speak = (text) => {
         if (synthRef.current) {
@@ -680,38 +761,74 @@ export default function Chat() {
         }
     };
 
-    const handleUserSpeech = (text) => {
+    const handleUserSpeech = async (text) => {
         const userMsg = { role: 'user', content: text, timestamp: new Date() };
         setConversation(prev => [...prev, userMsg]);
         
         setIsTyping(true);
         
-        setTimeout(() => {
-            const aiResponse = generateAIResponse(text);
-            const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
+        try {
+            const result = await sendMessageToAPI(text);
+            const aiMsg = { 
+                role: 'ai', 
+                content: result.response, 
+                timestamp: new Date(),
+                emotionalAnalysis: result.emotionalAnalysis,
+                recommendation: result.recommendation,
+                therapistAlert: result.therapistAlert,
+            };
             setIsTyping(false);
             setConversation(prev => [...prev, aiMsg]);
-            setAvatarText(aiResponse);
-            speak(aiResponse);
-        }, 800 + Math.random() * 1200);
+            setAvatarText(result.response);
+            speak(result.response);
+            
+            // Show therapist alert if needed
+            if (result.therapistAlert) {
+                setTimeout(() => {
+                    alert('⚠️ A therapist has been notified based on your message. Help is available.');
+                }, 1000);
+            }
+        } catch (error) {
+            setIsTyping(false);
+            // Error already set in sendMessageToAPI
+        }
     };
 
-    const handleTextSubmit = (e) => {
+    const handleTextSubmit = async (e) => {
         e.preventDefault();
-        if (!textInput.trim() || isSpeaking) return;
-        const userMsg = { role: 'user', content: textInput, timestamp: new Date() };
+        if (!textInput.trim() || isSpeaking || isTyping) return;
+        
+        const messageText = textInput.trim();
+        const userMsg = { role: 'user', content: messageText, timestamp: new Date() };
         setConversation(prev => [...prev, userMsg]);
         setTextInput('');
         setIsTyping(true);
         
-        setTimeout(() => {
-            const aiResponse = generateAIResponse(textInput);
-            const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
+        try {
+            const result = await sendMessageToAPI(messageText);
+            const aiMsg = { 
+                role: 'ai', 
+                content: result.response, 
+                timestamp: new Date(),
+                emotionalAnalysis: result.emotionalAnalysis,
+                recommendation: result.recommendation,
+                therapistAlert: result.therapistAlert,
+            };
             setIsTyping(false);
             setConversation(prev => [...prev, aiMsg]);
-            setAvatarText(aiResponse);
-            speak(aiResponse);
-        }, 800 + Math.random() * 1200);
+            setAvatarText(result.response);
+            speak(result.response);
+            
+            // Show therapist alert if needed
+            if (result.therapistAlert) {
+                setTimeout(() => {
+                    alert('⚠️ A therapist has been notified based on your message. Help is available.');
+                }, 1000);
+            }
+        } catch (error) {
+            setIsTyping(false);
+            // Error already set in sendMessageToAPI
+        }
     };
 
     const copyMessage = (content) => {
@@ -725,6 +842,8 @@ export default function Chat() {
     const saveConversation = () => {
         if (conversation.length === 0) return;
         
+        // Conversations are already saved to backend via API
+        // This is just for local session management
         const sessionId = Date.now();
         const session = {
             id: sessionId,
@@ -736,6 +855,92 @@ export default function Chat() {
         setConversationHistory(prev => [session, ...prev]);
         setConversation([]);
         setAvatarText('Hi! I\'m Maya, your wellness companion. Talk to me or type below!');
+    };
+    
+    const renderRecommendationBadge = (recommendation) => {
+        if (!recommendation || !recommendation.actions || recommendation.actions.length === 0) {
+            return null;
+        }
+        
+        const actionIcons = {
+            SUGGEST_JOURNAL: BookOpen,
+            SUGGEST_HABIT: Target,
+            SUGGEST_THERAPY: Users,
+            ALERT_THERAPIST: AlertCircle,
+        };
+        
+        const actionLabels = {
+            SUGGEST_JOURNAL: 'Try Journaling',
+            SUGGEST_HABIT: 'Build a Habit',
+            SUGGEST_THERAPY: 'Book Therapist',
+            ALERT_THERAPIST: 'Therapist Alerted',
+        };
+        
+        return (
+            <div style={{ 
+                marginTop: '0.5rem', 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '0.5rem' 
+            }}>
+                {recommendation.actions.map((action, idx) => {
+                    const Icon = actionIcons[action] || Target;
+                    return (
+                        <span 
+                            key={idx}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                padding: '0.25rem 0.5rem',
+                                background: 'rgba(102, 126, 234, 0.1)',
+                                border: '1px solid rgba(102, 126, 234, 0.3)',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                color: '#667eea',
+                                fontWeight: 500,
+                            }}
+                        >
+                            <Icon size={12} />
+                            {actionLabels[action] || action}
+                        </span>
+                    );
+                })}
+            </div>
+        );
+    };
+    
+    const renderEmotionalAnalysis = (analysis) => {
+        if (!analysis || !analysis.emotionScores) return null;
+        
+        const scores = analysis.emotionScores;
+        const topEmotions = Object.entries(scores)
+            .filter(([_, score]) => score > 0.3)
+            .sort(([_, a], [__, b]) => b - a)
+            .slice(0, 3);
+        
+        if (topEmotions.length === 0) return null;
+        
+        return (
+            <div style={{ 
+                marginTop: '0.5rem', 
+                padding: '0.5rem', 
+                background: 'rgba(0, 0, 0, 0.02)', 
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+            }}>
+                <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--color-muted-foreground)' }}>
+                    Detected Emotions:
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {topEmotions.map(([emotion, score]) => (
+                        <span key={emotion} style={{ color: 'var(--color-foreground)' }}>
+                            {emotion.charAt(0).toUpperCase() + emotion.slice(1)}: {Math.round(score * 100)}%
+                        </span>
+                    ))}
+                </div>
+            </div>
+        );
     };
 
     const loadConversation = (session) => {
@@ -982,7 +1187,12 @@ export default function Chat() {
 
                     <div className="messages-area">
                         <div className="messages-scroll">
-                            {conversation.length === 0 ? (
+                            {loadingHistory ? (
+                                <div className="welcome-message">
+                                    <Loader2 size={32} className="animate-spin" style={{ margin: '0 auto', color: '#667eea' }} />
+                                    <p style={{ marginTop: '1rem', color: 'var(--color-muted-foreground)' }}>Loading chat history...</p>
+                                </div>
+                            ) : conversation.length === 0 ? (
                                 <div className="welcome-message">
                                     <div className="empty-state-icon">💬</div>
                                     <h2>Start a Conversation</h2>
@@ -995,46 +1205,80 @@ export default function Chat() {
                                 </div>
                             ) : (
                                 <>
-                                    {conversation.map((msg, index) => (
-                                        <div key={index} className={`chat-message ${msg.role}`}>
-                                            <div className="message-avatar-icon">
-                                                {msg.role === 'user' ? '👤' : '🤖'}
-                                            </div>
-                                            <div className="message-bubble-wrapper">
-                                                <div className="message-bubble">
-                                                    <p>{msg.content}</p>
-                                                    <span className="message-timestamp">
-                                                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                </div>
-                                                {msg.role === 'ai' && (
-                                                    <div className="message-actions">
-                                                        <button 
-                                                            className="message-action-btn"
-                                                            onClick={() => copyMessage(msg.content)}
-                                                            title="Copy message"
-                                                        >
-                                                            📋
-                                                        </button>
-                                                        <button 
-                                                            className="message-action-btn"
-                                                            onClick={() => giveFeedback(index, true)}
-                                                            title="Helpful"
-                                                        >
-                                                            👍
-                                                        </button>
-                                                        <button 
-                                                            className="message-action-btn"
-                                                            onClick={() => giveFeedback(index, false)}
-                                                            title="Not helpful"
-                                                        >
-                                                            👎
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
+                                    {error && (
+                                        <div style={{
+                                            margin: '1rem',
+                                            padding: '0.75rem 1rem',
+                                            background: 'rgba(239, 68, 68, 0.1)',
+                                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                                            borderRadius: '8px',
+                                            color: '#ef4444',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                        }}>
+                                            <AlertCircle size={16} />
+                                            <span>{error}</span>
+                                            <button 
+                                                onClick={() => setError(null)}
+                                                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}
+                                            >
+                                                ✕
+                                            </button>
                                         </div>
-                                    ))}
+                                    )}
+                                    {conversation.map((msg, index) => {
+                                        const timestamp = msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp);
+                                        const emotionalAnalysis = typeof msg.emotionalAnalysis === 'string' 
+                                            ? JSON.parse(msg.emotionalAnalysis) 
+                                            : msg.emotionalAnalysis;
+                                        const recommendation = typeof msg.recommendation === 'string'
+                                            ? JSON.parse(msg.recommendation)
+                                            : msg.recommendation;
+                                        
+                                        return (
+                                            <div key={msg.id || index} className={`chat-message ${msg.role}`}>
+                                                <div className="message-avatar-icon">
+                                                    {msg.role === 'user' ? '👤' : '🤖'}
+                                                </div>
+                                                <div className="message-bubble-wrapper">
+                                                    <div className="message-bubble">
+                                                        <p>{msg.content}</p>
+                                                        {msg.role === 'ai' && renderEmotionalAnalysis(emotionalAnalysis)}
+                                                        {msg.role === 'ai' && renderRecommendationBadge(recommendation)}
+                                                        <span className="message-timestamp">
+                                                            {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </div>
+                                                    {msg.role === 'ai' && (
+                                                        <div className="message-actions">
+                                                            <button 
+                                                                className="message-action-btn"
+                                                                onClick={() => copyMessage(msg.content)}
+                                                                title="Copy message"
+                                                            >
+                                                                📋
+                                                            </button>
+                                                            <button 
+                                                                className="message-action-btn"
+                                                                onClick={() => giveFeedback(index, true)}
+                                                                title="Helpful"
+                                                            >
+                                                                👍
+                                                            </button>
+                                                            <button 
+                                                                className="message-action-btn"
+                                                                onClick={() => giveFeedback(index, false)}
+                                                                title="Not helpful"
+                                                            >
+                                                                👎
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                     
                                     {/* Typing Indicator */}
                                     {isTyping && (
