@@ -4,19 +4,37 @@ class EmbeddingService {
   constructor() {
     this.model = null;
     this.initialized = false;
+    this.modelName = 'Xenova/all-MiniLM-L6-v2'; // Lightweight 384-dim model (~80MB)
   }
 
   async initialize() {
+    if (this.initialized) return;
+    
     try {
-      if (this.initialized) return;
+      // Try using @xenova/transformers for lightweight local embeddings
+      const { pipeline } = require('@xenova/transformers');
       
-      const nodeEmbedding = require('node-embedding');
-      this.model = new nodeEmbedding.SentenceTransformer('Xenova/all-MiniLM-L6-v2');
+      logger.info(`Loading lightweight local embedding model: ${this.modelName}`);
+      this.model = await pipeline('feature-extraction', this.modelName, {
+        quantized: true, // Use quantized model for smaller size
+        device: 'cpu' // Use CPU to avoid GPU dependencies
+      });
+      
       this.initialized = true;
-      logger.info('Embedding model initialized successfully');
+      logger.info('Lightweight local embedding model initialized successfully');
     } catch (error) {
-      logger.warn('Failed to load transformer model, using fallback embedding method:', error.message);
-      this.initialized = true;
+      logger.warn('Failed to load @xenova/transformers, trying alternative method:', error.message);
+      
+      // Fallback: try node-embedding if available
+      try {
+        const nodeEmbedding = require('node-embedding');
+        this.model = new nodeEmbedding.SentenceTransformer(this.modelName);
+        this.initialized = true;
+        logger.info('Embedding model initialized with node-embedding fallback');
+      } catch (fallbackError) {
+        logger.warn('All embedding model loading methods failed, using fallback embedding method');
+        this.initialized = true;
+      }
     }
   }
 
@@ -24,12 +42,25 @@ class EmbeddingService {
     try {
       await this.initialize();
       
-      if (this.model) {
-        const embeddings = await this.model.embed(text);
-        return embeddings;
-      } else {
+      if (!this.model) {
         return this.fallbackEmbedding(text);
       }
+
+      // Handle @xenova/transformers pipeline
+      if (typeof this.model === 'function') {
+        const output = await this.model(text, { pooling: 'mean', normalize: true });
+        // Extract the embedding array from the tensor
+        const embedding = Array.from(output.data);
+        return embedding;
+      }
+      
+      // Handle node-embedding or other compatible APIs
+      if (typeof this.model.embed === 'function') {
+        const embeddings = await this.model.embed(text);
+        return embeddings;
+      }
+      
+      return this.fallbackEmbedding(text);
     } catch (error) {
       logger.error('Error generating embedding:', error);
       return this.fallbackEmbedding(text);

@@ -1,81 +1,158 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, Star, Video, MapPin, Award } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar, Clock, Star, Video, MapPin, Award, AlertCircle } from 'lucide-react';
 import Modal from '../components/shared/Modal';
+import { useApp } from '../context/AppContext';
+
+// Safe JSON parsing function with error handling
+const safeParseJSON = (jsonString, fallback = []) => {
+    if (typeof jsonString !== 'string') {
+        return jsonString || fallback;
+    }
+    try {
+        return JSON.parse(jsonString);
+    } catch (error) {
+        console.warn('Failed to parse JSON string:', jsonString, error);
+        return fallback;
+    }
+};
 
 export default function Therapists() {
     const [selectedTherapist, setSelectedTherapist] = useState(null);
     const [isBookingOpen, setIsBookingOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
+    const [therapists, setTherapists] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [bookingLoading, setBookingLoading] = useState(false);
+    const [bookingError, setBookingError] = useState('');
+    const [bookingSuccess, setBookingSuccess] = useState('');
+    const { isAuthenticated } = useApp();
 
-    const therapists = [
-        {
-            id: 1,
-            name: 'Dr. Sarah Johnson',
-            specialty: 'Anxiety & Depression',
-            rating: 4.9,
-            reviews: 127,
-            experience: '12 years',
-            location: 'Remote',
-            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-            price: '$120/session',
-            available: ['Mon', 'Wed', 'Fri']
-        },
-        {
-            id: 2,
-            name: 'Dr. Michael Chen',
-            specialty: 'Trauma & PTSD',
-            rating: 4.8,
-            reviews: 98,
-            experience: '15 years',
-            location: 'Remote',
-            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Michael',
-            price: '$150/session',
-            available: ['Tue', 'Thu', 'Sat']
-        },
-        {
-            id: 3,
-            name: 'Dr. Emily Rodriguez',
-            specialty: 'Stress Management',
-            rating: 4.9,
-            reviews: 156,
-            experience: '10 years',
-            location: 'Remote',
-            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emily',
-            price: '$110/session',
-            available: ['Mon', 'Tue', 'Wed', 'Thu']
-        },
-        {
-            id: 4,
-            name: 'Dr. James Williams',
-            specialty: 'Relationship Counseling',
-            rating: 4.7,
-            reviews: 89,
-            experience: '8 years',
-            location: 'Remote',
-            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=James',
-            price: '$130/session',
-            available: ['Wed', 'Thu', 'Fri']
-        },
-    ];
+    // Memoize API_BASE_URL to prevent unnecessary re-renders
+    const API_BASE_URL = useMemo(() => import.meta.env.VITE_API_URL || 'http://localhost:4000', []);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                setLoading(true);
+                setError('');
+                const res = await fetch(`${API_BASE_URL}/api/therapists`);
+                if (!res.ok) {
+                    throw new Error('Failed to fetch therapists');
+                }
+                const json = await res.json();
+                if (!cancelled) {
+                    // Parse available field if it's a JSON string - with safe error handling
+                    const therapistsData = (json.therapists || []).map(therapist => ({
+                        ...therapist,
+                        available: typeof therapist.available === 'string' 
+                            ? safeParseJSON(therapist.available, []) 
+                            : therapist.available || [],
+                        price: typeof therapist.price === 'number' 
+                            ? `$${therapist.price}/session` 
+                            : therapist.price || 'Price not available'
+                    }));
+                    setTherapists(therapistsData);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setError('Failed to load therapists. Please try again later.');
+                    console.error('Error fetching therapists:', err);
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [API_BASE_URL]);
 
     const availableTimes = [
         '09:00 AM', '10:00 AM', '11:00 AM', '01:00 PM', '02:00 PM', '03:00 PM', '04:00 PM'
     ];
 
     const handleBooking = (therapist) => {
+        if (!isAuthenticated) {
+            setError('Please log in to book a session');
+            return;
+        }
         setSelectedTherapist(therapist);
         setIsBookingOpen(true);
+        setBookingError('');
+        setBookingSuccess('');
     };
 
-    const confirmBooking = () => {
-        if (selectedDate && selectedTime) {
-            alert(`Session booked with ${selectedTherapist.name} on ${selectedDate} at ${selectedTime}`);
-            setIsBookingOpen(false);
-            setSelectedDate('');
-            setSelectedTime('');
-        } else {
-            alert('Please select both date and time');
+    const confirmBooking = async () => {
+        if (!selectedDate || !selectedTime) {
+            setBookingError('Please select both date and time');
+            return;
+        }
+
+        if (!isAuthenticated) {
+            setBookingError('Please log in to book a session');
+            return;
+        }
+
+        setBookingLoading(true);
+        setBookingError('');
+        setBookingSuccess('');
+
+        try {
+            const token = localStorage.getItem('authToken');
+            if (!token) {
+                throw new Error('Authentication required');
+            }
+
+            // Convert time format from "09:00 AM" / "01:00 PM" to "09:00" / "13:00"
+            let timeFormatted = selectedTime.trim();
+            const isPM = /PM/i.test(timeFormatted);
+            const timeMatch = timeFormatted.match(/(\d{1,2}):(\d{2})/);
+            if (timeMatch) {
+                let hours = parseInt(timeMatch[1], 10);
+                const minutes = timeMatch[2];
+                if (isPM && hours !== 12) {
+                    hours += 12;
+                } else if (!isPM && hours === 12) {
+                    hours = 0;
+                }
+                timeFormatted = `${hours.toString().padStart(2, '0')}:${minutes}`;
+            } else {
+                // Fallback: just remove AM/PM if format doesn't match
+                timeFormatted = timeFormatted.replace(/\s*(AM|PM)\s*/i, '');
+            }
+
+            const res = await fetch(`${API_BASE_URL}/api/therapists/${selectedTherapist.id}/book`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    date: selectedDate,
+                    time: timeFormatted
+                })
+            });
+
+            const json = await res.json();
+
+            if (!res.ok) {
+                throw new Error(json.error || 'Failed to book session');
+            }
+
+            setBookingSuccess('Session booked successfully!');
+            setTimeout(() => {
+                setIsBookingOpen(false);
+                setSelectedDate('');
+                setSelectedTime('');
+                setBookingSuccess('');
+                // Optionally refresh therapists or navigate to appointments
+            }, 2000);
+        } catch (err) {
+            setBookingError(err.message || 'Failed to book session. Please try again.');
+            console.error('Error booking session:', err);
+        } finally {
+            setBookingLoading(false);
         }
     };
 
@@ -88,8 +165,42 @@ export default function Therapists() {
                 </div>
             </header>
 
-            <div className="therapists-grid">
-                {therapists.map((therapist) => (
+            {error && (
+                <div className="error-message" style={{
+                    padding: '1rem',
+                    marginBottom: '1rem',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '8px',
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                }}>
+                    <AlertCircle size={20} />
+                    <span>{error}</span>
+                </div>
+            )}
+
+            {loading ? (
+                <div className="loading-message" style={{
+                    padding: '2rem',
+                    textAlign: 'center',
+                    color: 'var(--color-muted-foreground)'
+                }}>
+                    Loading therapists...
+                </div>
+            ) : therapists.length === 0 ? (
+                <div className="empty-message" style={{
+                    padding: '2rem',
+                    textAlign: 'center',
+                    color: 'var(--color-muted-foreground)'
+                }}>
+                    No therapists available at the moment.
+                </div>
+            ) : (
+                <div className="therapists-grid">
+                    {therapists.map((therapist) => (
                     <div key={therapist.id} className="therapist-card">
                         <div className="therapist-header">
                             <img src={therapist.avatar} alt={therapist.name} className="therapist-avatar" />
@@ -136,8 +247,9 @@ export default function Therapists() {
                             </button>
                         </div>
                     </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
 
             <Modal
                 isOpen={isBookingOpen}
@@ -184,8 +296,47 @@ export default function Therapists() {
                         <p><strong>Format:</strong> Video Session</p>
                     </div>
 
-                    <button onClick={confirmBooking} className="btn-primary btn-full">
-                        Confirm Booking
+                    {bookingError && (
+                        <div className="error-message" style={{
+                            padding: '0.75rem',
+                            marginBottom: '1rem',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            borderRadius: '8px',
+                            color: '#ef4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            fontSize: '0.9rem'
+                        }}>
+                            <AlertCircle size={16} />
+                            <span>{bookingError}</span>
+                        </div>
+                    )}
+
+                    {bookingSuccess && (
+                        <div className="success-message" style={{
+                            padding: '0.75rem',
+                            marginBottom: '1rem',
+                            background: 'rgba(34, 197, 94, 0.1)',
+                            border: '1px solid rgba(34, 197, 94, 0.3)',
+                            borderRadius: '8px',
+                            color: '#22c55e',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            fontSize: '0.9rem'
+                        }}>
+                            <span>{bookingSuccess}</span>
+                        </div>
+                    )}
+
+                    <button 
+                        onClick={confirmBooking} 
+                        className="btn-primary btn-full"
+                        disabled={bookingLoading}
+                    >
+                        {bookingLoading ? 'Booking...' : 'Confirm Booking'}
                     </button>
                 </div>
             </Modal>

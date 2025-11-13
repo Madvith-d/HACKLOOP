@@ -3,7 +3,21 @@ import { Navigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-    const { isAuthenticated, user } = useApp();
+    const { isAuthenticated, user, isLoading } = useApp();
+
+    // Show loading state while verifying authentication
+    if (isLoading) {
+        return (
+            <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '100vh' 
+            }}>
+                Loading...
+            </div>
+        );
+    }
 
     if (!isAuthenticated) {
         return <Navigate to="/login" replace />;

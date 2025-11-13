@@ -11,7 +11,9 @@ npm install
 This installs all required packages including:
 - `@langchain/core` - Core LangChain utilities
 - `@langchain/langgraph` - Graph-based agent orchestration
+- `@langchain/google-genai` - Google Gemini integration for LangChain
 - `@langchain/community` - Community integrations
+- `@xenova/transformers` - Lightweight local embedding model
 - `@pinecone-database/pinecone` - Optional Pinecone integration
 
 ### 2. Configure Environment
@@ -23,6 +25,9 @@ cp .env.example .env
 Edit `.env` and set these AI-specific variables:
 
 ```bash
+# Google Gemini API Key (Required for AI agent)
+GOOGLE_GEMINI_API_KEY=your-gemini-api-key
+
 # Vector Storage (default: local)
 USE_LOCAL_VECTORS=true
 
@@ -31,6 +36,12 @@ USE_LOCAL_VECTORS=true
 # PINECONE_ENVIRONMENT=us-west1-gcp
 # PINECONE_INDEX=mindmesh
 ```
+
+**Getting a Gemini API Key:**
+1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Sign in with your Google account
+3. Create a new API key
+4. Copy the key and add it to your `.env` file
 
 ### 3. Start the Server
 
@@ -150,13 +161,31 @@ curl -X GET http://localhost:4000/api/chat/agent-info
 - `HIGH` - Professional help recommended
 - `CRITICAL` - Crisis situation
 
+## AI Models Used
+
+### Google Gemini Pro
+- **Purpose**: Emotion analysis and response generation
+- **Model**: `gemini-pro`
+- **Usage**: Powers the LangGraph agentic AI system
+- **Cost**: Free tier available, then pay-per-use
+- **Configuration**: Set `GOOGLE_GEMINI_API_KEY` in `.env`
+
+### Local Embedding Model
+- **Model**: `Xenova/all-MiniLM-L6-v2`
+- **Purpose**: Generate vector embeddings for semantic search
+- **Size**: ~80MB (quantized)
+- **Dimensions**: 384
+- **Storage**: Runs locally, no API calls needed
+- **Library**: `@xenova/transformers`
+
 ## Vector Embeddings
 
 ### How They Work
-1. Each message is converted to a 384-dimensional vector
+1. Each message is converted to a 384-dimensional vector using the local lightweight model
 2. Vectors are stored with metadata (timestamp, type, emotions)
 3. Similar messages can be found using cosine similarity
 4. Context is retrieved from similar past entries
+5. All processing happens locally - no external API calls for embeddings
 
 ### Local Storage
 - Stored in `./data/vectors/` directory

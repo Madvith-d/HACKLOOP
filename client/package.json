@@ -9,7 +9,7 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@amplitude/analytics-browser": "^2.27.0",
+        "@amplitude/analytics-browser": "^1.14.0",
         "@react-three/drei": "^9.88.0",
         "@react-three/fiber": "^8.15.0",
         "@readyplayerme/visage": "^6.16.0",
@@ -21,7 +21,7 @@
         "react-is": "^19.2.0",
         "react-router-dom": "^7.9.4",
         "recharts": "^3.3.0",
-        "three": "^0.160.0"
+        "three": "0.166.1"
     },
     "devDependencies": {
         "@vitejs/plugin-react": "^4.2.0",
