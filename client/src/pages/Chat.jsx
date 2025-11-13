@@ -587,6 +587,7 @@ function RealisticAvatar({ isSpeaking }) {
 }
 
 export default function Chat() {
+    console.log('[Chat] Component rendering');
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [transcript, setTranscript] = useState('');
@@ -607,6 +608,10 @@ export default function Chat() {
     const analyserRef = useRef(null);
     const textInputRef = useRef(null);
     const { user } = useApp();
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    
+    console.log('[Chat] API_BASE_URL:', API_BASE_URL);
+    console.log('[Chat] User:', user);
 
     useEffect(() => {
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
@@ -639,7 +644,8 @@ export default function Chat() {
         };
     }, []);
 
-    const generateAIResponse = (userMessage) => {
+    // Fallback response generator (used when API fails)
+    const generateFallbackResponse = (userMessage) => {
         const lowerMessage = userMessage.toLowerCase();
         
         if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety')) {
@@ -654,6 +660,61 @@ export default function Chat() {
             return "I'm here to help you. Tell me what's on your mind, and we'll work through it together. Remember, seeking help is a sign of strength.";
         } else {
             return "Thank you for sharing that with me. Your feelings matter. Can you tell me more about how you're feeling right now?";
+        }
+    };
+
+    // Call the backend API for chat response
+    const getAIResponse = async (userMessage) => {
+        console.log('[Chat] getAIResponse called with message:', userMessage);
+        const token = localStorage.getItem('authToken');
+        
+        if (!token) {
+            console.warn('[Chat] No auth token found, using fallback response');
+            const fallback = generateFallbackResponse(userMessage);
+            console.log('[Chat] Fallback response:', fallback);
+            return fallback;
+        }
+
+        console.log('[Chat] Making API request to:', `${API_BASE_URL}/api/chat/message`);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/chat/message`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ message: userMessage })
+            });
+
+            console.log('[Chat] API response status:', response.status);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('[Chat] API request failed:', response.status, errorText);
+                throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log('[Chat] API response data:', data);
+            
+            if (data.success && data.response) {
+                console.log('[Chat] Returning API response:', data.response);
+                return data.response;
+            } else {
+                console.error('[Chat] Invalid response format:', data);
+                throw new Error('Invalid response format from API');
+            }
+        } catch (error) {
+            console.error('[Chat] Error calling chat API:', error);
+            console.error('[Chat] Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
+            // Fallback to default response on error
+            const fallback = generateFallbackResponse(userMessage);
+            console.log('[Chat] Using fallback response:', fallback);
+            return fallback;
         }
     };
 
@@ -680,38 +741,84 @@ export default function Chat() {
         }
     };
 
-    const handleUserSpeech = (text) => {
+    const handleUserSpeech = async (text) => {
+        console.log('[Chat] handleUserSpeech called with text:', text);
         const userMsg = { role: 'user', content: text, timestamp: new Date() };
         setConversation(prev => [...prev, userMsg]);
         
         setIsTyping(true);
+        console.log('[Chat] Set typing to true for speech');
         
-        setTimeout(() => {
-            const aiResponse = generateAIResponse(text);
+        try {
+            console.log('[Chat] Calling getAIResponse for speech...');
+            const aiResponse = await getAIResponse(text);
+            console.log('[Chat] Received AI response for speech:', aiResponse);
+            
             const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
             setIsTyping(false);
             setConversation(prev => [...prev, aiMsg]);
             setAvatarText(aiResponse);
             speak(aiResponse);
-        }, 800 + Math.random() * 1200);
+            console.log('[Chat] handleUserSpeech completed successfully');
+        } catch (error) {
+            console.error('[Chat] Error handling user speech:', error);
+            console.error('[Chat] Error stack:', error.stack);
+            setIsTyping(false);
+            const fallbackResponse = generateFallbackResponse(text);
+            console.log('[Chat] Using fallback for speech:', fallbackResponse);
+            const aiMsg = { role: 'ai', content: fallbackResponse, timestamp: new Date() };
+            setConversation(prev => [...prev, aiMsg]);
+            setAvatarText(fallbackResponse);
+            speak(fallbackResponse);
+        }
     };
 
-    const handleTextSubmit = (e) => {
+    const handleTextSubmit = async (e) => {
         e.preventDefault();
-        if (!textInput.trim() || isSpeaking) return;
-        const userMsg = { role: 'user', content: textInput, timestamp: new Date() };
-        setConversation(prev => [...prev, userMsg]);
+        console.log('[Chat] handleTextSubmit called');
+        console.log('[Chat] textInput:', textInput);
+        console.log('[Chat] isSpeaking:', isSpeaking);
+        
+        if (!textInput.trim() || isSpeaking) {
+            console.log('[Chat] Early return - empty input or speaking');
+            return;
+        }
+        
+        const userMessage = textInput.trim();
+        console.log('[Chat] Processing message:', userMessage);
+        
+        const userMsg = { role: 'user', content: userMessage, timestamp: new Date() };
+        setConversation(prev => {
+            console.log('[Chat] Adding user message to conversation');
+            return [...prev, userMsg];
+        });
         setTextInput('');
         setIsTyping(true);
+        console.log('[Chat] Set typing to true');
         
-        setTimeout(() => {
-            const aiResponse = generateAIResponse(textInput);
+        try {
+            console.log('[Chat] Calling getAIResponse...');
+            const aiResponse = await getAIResponse(userMessage);
+            console.log('[Chat] Received AI response:', aiResponse);
+            
             const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
             setIsTyping(false);
+            console.log('[Chat] Set typing to false, adding AI message');
             setConversation(prev => [...prev, aiMsg]);
             setAvatarText(aiResponse);
             speak(aiResponse);
-        }, 800 + Math.random() * 1200);
+            console.log('[Chat] handleTextSubmit completed successfully');
+        } catch (error) {
+            console.error('[Chat] Error in handleTextSubmit:', error);
+            console.error('[Chat] Error stack:', error.stack);
+            setIsTyping(false);
+            const fallbackResponse = generateFallbackResponse(userMessage);
+            console.log('[Chat] Using fallback in catch block:', fallbackResponse);
+            const aiMsg = { role: 'ai', content: fallbackResponse, timestamp: new Date() };
+            setConversation(prev => [...prev, aiMsg]);
+            setAvatarText(fallbackResponse);
+            speak(fallbackResponse);
+        }
     };
 
     const copyMessage = (content) => {
@@ -954,7 +1061,11 @@ export default function Chat() {
                 </div>
                 <div className="chat-main">
                     <div className="avatar-container-3d">
-                        <Canvas camera={{ position: [0, 0, 3], fov: 50 }} shadows>
+                        <Canvas 
+                            camera={{ position: [0, 0, 3], fov: 50 }} 
+                            shadows
+                            style={{ width: '100%', height: '100%' }}
+                        >
                             <ambientLight intensity={0.6} />
                             <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
                             <spotLight position={[0, 10, 0]} angle={0.3} penumbra={1} intensity={0.8} />
@@ -970,7 +1081,7 @@ export default function Chat() {
                                 enablePan={false}
                                 minPolarAngle={Math.PI / 4}
                                 maxPolarAngle={Math.PI / 1.8}
-                                target={[0, 0.5, 0]}
+                                target={[0, -0.9, 0]}
                             />
                         </Canvas>
 
@@ -1100,6 +1211,13 @@ export default function Chat() {
                                 type="submit"
                                 className="send-button"
                                 disabled={!textInput.trim() || isSpeaking || isListening}
+                                onClick={(e) => {
+                                    console.log('[Chat] Send button clicked');
+                                    if (!textInput.trim() || isSpeaking || isListening) {
+                                        console.log('[Chat] Button disabled, not submitting');
+                                        e.preventDefault();
+                                    }
+                                }}
                             >
                                 ➤
                             </button>

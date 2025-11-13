@@ -104,12 +104,15 @@ class EmpatheticChatAgent {
   getAgentDescription() {
     return {
       name: 'Empathetic Chat Agent',
-      version: '1.0.0',
-      description: 'An AI agent that listens to users and provides personalized mental health support',
+      version: '2.0.0',
+      description: 'An AI agent powered by Google Gemini and LangGraph that listens to users and provides personalized mental health support',
+      aiModel: 'Google Gemini Pro',
+      embeddingModel: 'Xenova/all-MiniLM-L6-v2 (local)',
       capabilities: [
-        'Emotional analysis',
+        'AI-powered emotional analysis using Gemini',
+        'Intelligent response generation with Gemini',
         'Context retrieval from user history',
-        'Vector embeddings for semantic search',
+        'Local vector embeddings for semantic search',
         'Personalized recommendations',
         'Therapist alerts for crisis situations'
       ],
@@ -123,4 +126,4 @@ class EmpatheticChatAgent {
   }
 }
 
-module.exports = new EmpathticChatAgent();
+module.exports = new EmpatheticChatAgent();
