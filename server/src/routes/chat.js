@@ -46,22 +46,37 @@ router.post('/message', authMiddleware, [
     const result = await agent.processMessage(userId, message);
 
     const chatId = uuidv4();
-    await db.query(`
-      INSERT INTO chat_messages (id, user_id, user_message, agent_response, emotional_analysis, recommendation, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, now())
-    `, [
-      chatId,
-      userId,
-      message,
-      result.response,
-      result.emotionalAnalysis ? JSON.stringify(result.emotionalAnalysis) : null,
-      result.recommendation ? JSON.stringify(result.recommendation) : null
-    ]);
+    let chatPersisted = false;
+
+    try {
+      await db.query(`
+        INSERT INTO chat_messages (id, user_id, user_message, agent_response, emotional_analysis, recommendation, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, now())
+      `, [
+        chatId,
+        userId,
+        message,
+        result.response,
+        result.emotionalAnalysis ? JSON.stringify(result.emotionalAnalysis) : null,
+        result.recommendation ? JSON.stringify(result.recommendation) : null
+      ]);
+      chatPersisted = true;
+    } catch (dbError) {
+      logger.warn('Failed to persist chat message', {
+        userId,
+        chatId,
+        error: dbError.message
+      });
+    }
+
+    const safeResponse = typeof result.response === 'string' && result.response.trim().length > 0
+      ? result.response
+      : '💭 Thank you for sharing. I\'m here to listen. Whether you want to journal, work on a habit, or talk to a therapist, I\'m here to support you.';
 
     res.json({
       success: true,
-      chatId,
-      response: result.response,
+      chatId: chatPersisted ? chatId : null,
+      response: safeResponse,
       recommendation: result.recommendation,
       emotionalAnalysis: result.emotionalAnalysis,
       therapistAlert: result.therapistAlert || false
@@ -101,18 +116,29 @@ router.post('/stream', authMiddleware, [
 
     const chatId = uuidv4();
     const finalChunk = chunks[chunks.length - 1];
-    
-    await db.query(`
-      INSERT INTO chat_messages (id, user_id, user_message, agent_response, emotional_analysis, recommendation, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, now())
-    `, [
-      chatId,
-      userId,
-      message,
-      finalChunk?.data || '',
-      chunks.find(c => c.type === 'analysis')?.data ? JSON.stringify(chunks.find(c => c.type === 'analysis').data) : null,
-      chunks.find(c => c.type === 'recommendation')?.data ? JSON.stringify(chunks.find(c => c.type === 'recommendation').data) : null
-    ]);
+    const responseText = typeof finalChunk?.data === 'string' ? finalChunk.data : '';
+    const analysisChunk = chunks.find(c => c.type === 'analysis');
+    const recommendationChunk = chunks.find(c => c.type === 'recommendation');
+
+    try {
+      await db.query(`
+        INSERT INTO chat_messages (id, user_id, user_message, agent_response, emotional_analysis, recommendation, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, now())
+      `, [
+        chatId,
+        userId,
+        message,
+        responseText,
+        analysisChunk?.data ? JSON.stringify(analysisChunk.data) : null,
+        recommendationChunk?.data ? JSON.stringify(recommendationChunk.data) : null
+      ]);
+    } catch (dbError) {
+      logger.warn('Failed to persist streamed chat message', {
+        userId,
+        chatId,
+        error: dbError.message
+      });
+    }
 
     res.end();
   } catch (error) {
