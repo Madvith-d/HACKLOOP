@@ -7,19 +7,41 @@ const logger = require('../utils/logger');
 const db = require('../db');
 const { v4: uuidv4 } = require('uuid');
 
+// Add logging middleware to track all chat route requests
+router.use((req, res, next) => {
+  logger.info('Chat route request received', {
+    method: req.method,
+    path: req.path,
+    fullUrl: req.originalUrl,
+    hasAuth: !!req.headers.authorization,
+    contentType: req.get('Content-Type'),
+    body: req.body ? { messageLength: req.body.message?.length, hasMessage: !!req.body.message } : 'no body',
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
+  });
+  next();
+});
+
 router.post('/message', authMiddleware, [
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 5000 }).withMessage('Message too long')
 ], async (req, res, next) => {
   try {
+    logger.info('Chat message POST route handler executing', { 
+      userId: req.user?.id,
+      messageLength: req.body?.message?.length,
+      messagePreview: req.body?.message?.substring(0, 50)
+    });
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      logger.warn('Validation errors in chat message', { errors: errors.array() });
       return res.status(400).json({ errors: errors.array() });
     }
 
     const { message } = req.body;
     const userId = req.user.id;
 
-    logger.info('Chat message received', { userId, messageLength: message.length });
+    logger.info('Chat message received and validated', { userId, messageLength: message.length });
 
     const result = await agent.processMessage(userId, message);
 
@@ -54,8 +76,14 @@ router.post('/stream', authMiddleware, [
   body('message').trim().notEmpty().withMessage('Message is required')
 ], async (req, res, next) => {
   try {
+    logger.info('Chat /stream endpoint hit', { 
+      userId: req.user?.id,
+      messageLength: req.body?.message?.length 
+    });
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      logger.warn('Validation errors in chat stream', { errors: errors.array() });
       return res.status(400).json({ errors: errors.array() });
     }
 
@@ -120,6 +148,21 @@ router.get('/history', authMiddleware, async (req, res, next) => {
 
 router.get('/agent-info', (req, res) => {
   res.json(agent.getAgentDescription());
+});
+
+// Test endpoint to verify connectivity (no auth required)
+router.get('/test', (req, res) => {
+  logger.info('Chat test endpoint hit', { 
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    headers: req.headers
+  });
+  res.json({ 
+    success: true, 
+    message: 'Chat API is reachable',
+    timestamp: new Date().toISOString(),
+    path: req.path
+  });
 });
 
 router.get('/analysis/:chatId', authMiddleware, async (req, res, next) => {
