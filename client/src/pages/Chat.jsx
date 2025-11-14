@@ -675,9 +675,18 @@ export default function Chat() {
             return fallback;
         }
 
-        console.log('[Chat] Making API request to:', `${API_BASE_URL}/api/chat/message`);
+        const url = `${API_BASE_URL}/api/chat/message`;
+        console.log('[Chat] Making API request to:', url);
+        console.log('[Chat] Request details:', {
+            method: 'POST',
+            url: url,
+            hasToken: !!token,
+            tokenLength: token.length,
+            messageLength: userMessage.length
+        });
+
         try {
-            const response = await fetch(`${API_BASE_URL}/api/chat/message`, {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -686,12 +695,29 @@ export default function Chat() {
                 body: JSON.stringify({ message: userMessage })
             });
 
-            console.log('[Chat] API response status:', response.status);
+            console.log('[Chat] API response received:', {
+                status: response.status,
+                statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries())
+            });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('[Chat] API request failed:', response.status, errorText);
-                throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+                let errorText;
+                try {
+                    errorText = await response.text();
+                    console.error('[Chat] API request failed - response text:', errorText);
+                    // Try to parse as JSON for better error message
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        console.error('[Chat] Parsed error JSON:', errorJson);
+                        throw new Error(`API request failed: ${errorJson.error || errorJson.message || errorText}`);
+                    } catch (parseError) {
+                        throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+                    }
+                } catch (textError) {
+                    console.error('[Chat] Error reading error response:', textError);
+                    throw new Error(`API request failed with status ${response.status}`);
+                }
             }
 
             const data = await response.json();
@@ -705,16 +731,20 @@ export default function Chat() {
                 throw new Error('Invalid response format from API');
             }
         } catch (error) {
+            // Check if it's a network error
+            if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                console.error('[Chat] Network error - backend may not be reachable:', error);
+                console.error('[Chat] Check if backend is running at:', API_BASE_URL);
+                throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Please check if the server is running.`);
+            }
+            
             console.error('[Chat] Error calling chat API:', error);
             console.error('[Chat] Error details:', {
                 message: error.message,
                 stack: error.stack,
                 name: error.name
             });
-            // Fallback to default response on error
-            const fallback = generateFallbackResponse(userMessage);
-            console.log('[Chat] Using fallback response:', fallback);
-            return fallback;
+            throw error; // Re-throw to let caller handle it
         }
     };
 
@@ -764,10 +794,21 @@ export default function Chat() {
             console.error('[Chat] Error handling user speech:', error);
             console.error('[Chat] Error stack:', error.stack);
             setIsTyping(false);
+            
+            // Show error message to user
+            const errorMsg = error.message || 'Failed to get response from server';
+            const errorDisplay = `⚠️ ${errorMsg}. Using fallback response.`;
+            
             const fallbackResponse = generateFallbackResponse(text);
             console.log('[Chat] Using fallback for speech:', fallbackResponse);
-            const aiMsg = { role: 'ai', content: fallbackResponse, timestamp: new Date() };
-            setConversation(prev => [...prev, aiMsg]);
+            
+            // Add error message and fallback response
+            const errorAiMsg = { 
+                role: 'ai', 
+                content: `${errorDisplay}\n\n${fallbackResponse}`, 
+                timestamp: new Date() 
+            };
+            setConversation(prev => [...prev, errorAiMsg]);
             setAvatarText(fallbackResponse);
             speak(fallbackResponse);
         }
@@ -812,10 +853,21 @@ export default function Chat() {
             console.error('[Chat] Error in handleTextSubmit:', error);
             console.error('[Chat] Error stack:', error.stack);
             setIsTyping(false);
+            
+            // Show error message to user
+            const errorMsg = error.message || 'Failed to get response from server';
+            const errorDisplay = `⚠️ ${errorMsg}. Using fallback response.`;
+            
             const fallbackResponse = generateFallbackResponse(userMessage);
             console.log('[Chat] Using fallback in catch block:', fallbackResponse);
-            const aiMsg = { role: 'ai', content: fallbackResponse, timestamp: new Date() };
-            setConversation(prev => [...prev, aiMsg]);
+            
+            // Add error message and fallback response
+            const errorAiMsg = { 
+                role: 'ai', 
+                content: `${errorDisplay}\n\n${fallbackResponse}`, 
+                timestamp: new Date() 
+            };
+            setConversation(prev => [...prev, errorAiMsg]);
             setAvatarText(fallbackResponse);
             speak(fallbackResponse);
         }
