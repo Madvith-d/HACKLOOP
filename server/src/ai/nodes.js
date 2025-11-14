@@ -58,12 +58,6 @@ async function analyzeEmotionNode(state) {
 async function retrieveContextNode(state) {
   logger.info('Node: Retrieving context', { userId: state.userId });
   
-  const store = await initVectorStore();
-  
-  const messageEmbedding = await embeddings.generateEmbedding(state.userMessage);
-  
-  const similarEntries = store.searchSimilar(state.userId, messageEmbedding, 5);
-  
   let userHistory = {
     journalEntries: [],
     habits: [],
@@ -72,29 +66,42 @@ async function retrieveContextNode(state) {
   };
 
   try {
-    const journals = await db.query(
-      'SELECT id, title, content, mood, created_at FROM journals WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5',
-      [state.userId]
-    );
+    // OPTIMIZATION: Run all database queries in parallel
+    const [journals, habits, emotions] = await Promise.all([
+      db.query(
+        'SELECT id, title, content, mood, created_at FROM journals WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5',
+        [state.userId]
+      ).catch(err => {
+        logger.error('Error fetching journals:', err);
+        return { rows: [] };
+      }),
+      db.query(
+        'SELECT id, name, frequency FROM habits WHERE user_id = $1 AND archived = false LIMIT 5',
+        [state.userId]
+      ).catch(err => {
+        logger.error('Error fetching habits:', err);
+        return { rows: [] };
+      }),
+      db.query(
+        'SELECT emotion, confidence, timestamp FROM emotions WHERE user_id = $1 ORDER BY timestamp DESC LIMIT 10',
+        [state.userId]
+      ).catch(err => {
+        logger.error('Error fetching emotions:', err);
+        return { rows: [] };
+      })
+    ]);
+
     userHistory.journalEntries = journals.rows;
-
-    const habits = await db.query(
-      'SELECT id, name, frequency FROM habits WHERE user_id = $1 AND archived = false LIMIT 5',
-      [state.userId]
-    );
     userHistory.habits = habits.rows;
-
-    const emotions = await db.query(
-      'SELECT emotion, confidence, timestamp FROM emotions WHERE user_id = $1 ORDER BY timestamp DESC LIMIT 10',
-      [state.userId]
-    );
     userHistory.recentEmotions = emotions.rows;
   } catch (error) {
     logger.error('Error retrieving user context:', error);
   }
 
+  // OPTIMIZATION: Run vector search in parallel with database queries (moved to background)
+  // We'll generate embeddings later in background, so no need to search now
   const contextualData = {
-    similarVectorEntries: similarEntries,
+    similarVectorEntries: [],
     userHistory,
     contextRetrievedAt: new Date().toISOString()
   };

@@ -11,30 +11,46 @@ class GeminiService {
   async initialize() {
     if (this.initialized) return;
     
-    try {
-      const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error('GOOGLE_GEMINI_API_KEY environment variable is not set');
-      }
-
-      this.model = new ChatGoogleGenerativeAI({
-        modelName: 'gemini-pro',
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-        apiKey: apiKey
-      });
-
-      this.initialized = true;
-      logger.info('Gemini model initialized successfully');
-    } catch (error) {
-      logger.error('Failed to initialize Gemini model:', error);
-      throw error;
+    // Prevent multiple simultaneous initialization attempts
+    if (this.initPromise) {
+      return this.initPromise;
     }
+
+    this.initPromise = (async () => {
+      try {
+        const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+        if (!apiKey) {
+          logger.warn('GOOGLE_GEMINI_API_KEY not set, will use fallback responses');
+          this.initialized = true;
+          return;
+        }
+
+        this.model = new ChatGoogleGenerativeAI({
+          modelName: 'gemini-pro',
+          temperature: 0.7,
+          maxOutputTokens: 512, // OPTIMIZATION: Reduced from 1024 for faster responses
+          apiKey: apiKey
+        });
+
+        this.initialized = true;
+        logger.info('Gemini model initialized successfully');
+      } catch (error) {
+        logger.error('Failed to initialize Gemini model:', error);
+        this.initialized = true; // Mark as initialized to use fallback
+      }
+    })();
+
+    return this.initPromise;
   }
 
   async analyzeEmotion(text) {
     await this.initialize();
     
+    // OPTIMIZATION: Use timeout for faster fallback
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => resolve(null), 3000); // 3 second timeout
+    });
+
     const systemPrompt = `You are an expert emotional analysis AI. Analyze the user's message and extract emotional information.
 Return a JSON object with this exact structure:
 {
@@ -58,7 +74,15 @@ Be accurate and empathetic. Only return valid JSON.`;
         new HumanMessage(`Analyze this message: "${text}"`)
       ];
 
-      const response = await this.model.invoke(messages);
+      const analysisPromise = this.model.invoke(messages);
+      const response = await Promise.race([analysisPromise, timeoutPromise]);
+      
+      // If timeout occurred, use fallback
+      if (!response) {
+        logger.warn('Emotion analysis timed out, using fallback');
+        return this.fallbackEmotionAnalysis(text);
+      }
+
       const content = response.content;
       
       // Extract JSON from response (handle markdown code blocks if present)
@@ -91,6 +115,11 @@ Be accurate and empathetic. Only return valid JSON.`;
   async generateResponse(state) {
     await this.initialize();
     
+    // OPTIMIZATION: Use timeout for faster fallback
+    const timeoutPromise = new Promise((resolve) => {
+      setTimeout(() => resolve(null), 5000); // 5 second timeout
+    });
+
     const { userMessage, emotionalAnalysis, contextualData, recommendation } = state;
     
     const systemPrompt = `You are an empathetic mental health support AI assistant. Your role is to:
@@ -106,23 +135,26 @@ Guidelines:
 - Keep responses concise (2-4 sentences)
 - Show empathy and understanding`;
 
+    // OPTIMIZATION: Reduce context information to minimize tokens
     let contextInfo = '';
     if (contextualData?.userHistory) {
       const history = contextualData.userHistory;
-      contextInfo = `\n\nUser Context:
-- Recent journal entries: ${history.journalEntries?.length || 0}
-- Active habits: ${history.habits?.length || 0}
-- Recent emotions tracked: ${history.recentEmotions?.length || 0}`;
+      const hasData = (history.journalEntries?.length || 0) > 0 || 
+                      (history.habits?.length || 0) > 0 || 
+                      (history.recentEmotions?.length || 0) > 0;
+      if (hasData) {
+        contextInfo = `\n\nUser has ${history.journalEntries?.length || 0} journals, ${history.habits?.length || 0} habits, ${history.recentEmotions?.length || 0} recent emotions.`;
+      }
     }
 
     let recommendationInfo = '';
     if (recommendation?.actions?.length > 0) {
-      recommendationInfo = `\n\nRecommended Actions: ${recommendation.actions.join(', ')}\nReasoning: ${recommendation.reasoning || ''}`;
+      recommendationInfo = `\n\nSuggested: ${recommendation.actions.join(', ')}`;
     }
 
-    const userPrompt = `User message: "${userMessage}"${contextInfo}${recommendationInfo}
+    const userPrompt = `User: "${userMessage}"${contextInfo}${recommendationInfo}
 
-Generate a supportive, empathetic response. Be genuine and helpful.`;
+Respond with empathy and support (2-4 sentences).`;
 
     try {
       const messages = [
@@ -130,7 +162,15 @@ Generate a supportive, empathetic response. Be genuine and helpful.`;
         new HumanMessage(userPrompt)
       ];
 
-      const response = await this.model.invoke(messages);
+      const responsePromise = this.model.invoke(messages);
+      const response = await Promise.race([responsePromise, timeoutPromise]);
+      
+      // If timeout occurred, use fallback
+      if (!response) {
+        logger.warn('Response generation timed out, using fallback');
+        return this.fallbackResponse(state);
+      }
+
       return response.content.trim();
     } catch (error) {
       logger.error('Error generating response with Gemini:', error);

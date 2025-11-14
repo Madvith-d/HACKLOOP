@@ -32,12 +32,33 @@ class EmpatheticChatAgent {
     });
 
     try {
-      state = await analyzeEmotionNode(state);
-      state = await retrieveContextNode(state);
-      state = await generateEmbeddingNode(state);
+      // OPTIMIZATION: Run emotion analysis and context retrieval in parallel
+      const [emotionState, contextState] = await Promise.all([
+        analyzeEmotionNode(state),
+        retrieveContextNode(state)
+      ]);
+
+      // Merge the results
+      state = {
+        ...state,
+        emotionalAnalysis: emotionState.emotionalAnalysis,
+        contextualData: contextState.contextualData
+      };
+
+      // Generate recommendation based on emotional analysis
       state = await recommendationNode(state);
+      
+      // Check for therapist alerts (fast operation)
       state = await therapistAlertNode(state);
+      
+      // Generate response using Gemini
       state = await responseGenerationNode(state);
+
+      // OPTIMIZATION: Generate embeddings in background (non-blocking)
+      // This doesn't need to delay the response to the user
+      generateEmbeddingNode(state).catch(err => 
+        logger.error('Background embedding generation failed:', err)
+      );
 
       logger.info('Message processing completed successfully', {
         userId,

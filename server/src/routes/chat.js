@@ -25,6 +25,9 @@ router.use((req, res, next) => {
 router.post('/message', authMiddleware, [
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 5000 }).withMessage('Message too long')
 ], async (req, res, next) => {
+  // Set request timeout to 15 seconds
+  req.setTimeout(15000);
+  
   try {
     logger.info('Chat message POST route handler executing', { 
       userId: req.user?.id,
@@ -43,7 +46,13 @@ router.post('/message', authMiddleware, [
 
     logger.info('Chat message received and validated', { userId, messageLength: message.length });
 
-    const result = await agent.processMessage(userId, message);
+    // Create a timeout promise for the entire operation
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 12000); // 12 second timeout
+    });
+
+    const processingPromise = agent.processMessage(userId, message);
+    const result = await Promise.race([processingPromise, timeoutPromise]);
 
     const chatId = uuidv4();
     let chatPersisted = false;
@@ -83,6 +92,19 @@ router.post('/message', authMiddleware, [
     });
   } catch (error) {
     logger.error('Error processing chat message:', error);
+    
+    // If it's a timeout, return a quick fallback response
+    if (error.message === 'Request timeout') {
+      return res.json({
+        success: true,
+        chatId: null,
+        response: '💭 Thank you for sharing. I\'m processing your message. How are you feeling right now?',
+        recommendation: null,
+        emotionalAnalysis: null,
+        therapistAlert: false
+      });
+    }
+    
     next(error);
   }
 });

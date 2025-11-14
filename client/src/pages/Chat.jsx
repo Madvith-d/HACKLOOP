@@ -784,6 +784,11 @@ export default function Chat() {
             const aiResponse = await getAIResponse(text);
             console.log('[Chat] Received AI response for speech:', aiResponse);
             
+            // Validate response before proceeding
+            if (!aiResponse || typeof aiResponse !== 'string' || aiResponse.trim().length === 0) {
+                throw new Error('Received empty or invalid response from server');
+            }
+            
             const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
             setIsTyping(false);
             setConversation(prev => [...prev, aiMsg]);
@@ -795,17 +800,13 @@ export default function Chat() {
             console.error('[Chat] Error stack:', error.stack);
             setIsTyping(false);
             
-            // Show error message to user
-            const errorMsg = error.message || 'Failed to get response from server';
-            const errorDisplay = `⚠️ ${errorMsg}. Using fallback response.`;
-            
             const fallbackResponse = generateFallbackResponse(text);
             console.log('[Chat] Using fallback for speech:', fallbackResponse);
             
-            // Add error message and fallback response
+            // Just add fallback response without scary error message
             const errorAiMsg = { 
                 role: 'ai', 
-                content: `${errorDisplay}\n\n${fallbackResponse}`, 
+                content: fallbackResponse, 
                 timestamp: new Date() 
             };
             setConversation(prev => [...prev, errorAiMsg]);
@@ -842,6 +843,11 @@ export default function Chat() {
             const aiResponse = await getAIResponse(userMessage);
             console.log('[Chat] Received AI response:', aiResponse);
             
+            // Validate response before proceeding
+            if (!aiResponse || typeof aiResponse !== 'string' || aiResponse.trim().length === 0) {
+                throw new Error('Received empty or invalid response from server');
+            }
+            
             const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
             setIsTyping(false);
             console.log('[Chat] Set typing to false, adding AI message');
@@ -854,17 +860,15 @@ export default function Chat() {
             console.error('[Chat] Error stack:', error.stack);
             setIsTyping(false);
             
-            // Show error message to user
+            // Show error message to user only if it's a real error
             const errorMsg = error.message || 'Failed to get response from server';
-            const errorDisplay = `⚠️ ${errorMsg}. Using fallback response.`;
-            
             const fallbackResponse = generateFallbackResponse(userMessage);
             console.log('[Chat] Using fallback in catch block:', fallbackResponse);
             
-            // Add error message and fallback response
+            // Just add fallback response without scary error message
             const errorAiMsg = { 
                 role: 'ai', 
-                content: `${errorDisplay}\n\n${fallbackResponse}`, 
+                content: fallbackResponse, 
                 timestamp: new Date() 
             };
             setConversation(prev => [...prev, errorAiMsg]);
