@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckSquare, RotateCw, Plus, Trash2, Trophy } from 'lucide-react';
+import { CheckSquare, RotateCw, Plus, Trash2, Trophy, Target, Calendar, TrendingUp, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function Habits() {
@@ -130,78 +130,186 @@ export default function Habits() {
     };
 
     return (
-        <div className="dashboard-page">
+        <div className="dashboard-page habits-page">
             <header className="page-header">
                 <div>
-                    <h1>Habit Tracker</h1>
-                    <p>Build routines and keep your streaks</p>
+                    <h1 className="gradient-text">Habit Tracker</h1>
+                    <p>Build routines and keep your streaks going</p>
                 </div>
             </header>
 
-            <div className="dashboard-grid">
-                <div className="dashboard-section">
-                    <h2>Create Habit</h2>
-                    <div className="card" style={{ padding: '1rem', display: 'grid', gap: '0.75rem' }}>
-                        <input className="input" placeholder="Habit name (e.g., Meditate 10 min)" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                        <div style={{ display: 'flex', gap: '0.75rem' }}>
-                            <select className="input" value={draft.frequency} onChange={(e) => setDraft({ ...draft, frequency: e.target.value })}>
-                                <option value="daily">Daily</option>
-                                <option value="weekly">Weekly</option>
-                            </select>
-                            <input className="input" type="number" min={1} max={7} value={draft.goalPerWeek} onChange={(e) => setDraft({ ...draft, goalPerWeek: Number(e.target.value) })} />
-                            <input className="input" type="number" min={1} max={20} value={draft.targetPerDay} onChange={(e) => setDraft({ ...draft, targetPerDay: Number(e.target.value) })} placeholder="Target per day" />
+            <div className="habits-layout">
+                <div className="habits-create-section">
+                    <div className="habits-section-header">
+                        <Sparkles className="section-icon" size={24} />
+                        <h2>Create New Habit</h2>
+                    </div>
+                    <div className="card habits-form-card">
+                        <div className="form-group">
+                            <label className="form-label">
+                                <Target size={18} />
+                                Habit Name
+                            </label>
+                            <input 
+                                className="input habits-input" 
+                                placeholder="e.g., Meditate 10 minutes, Drink 8 glasses of water" 
+                                value={draft.name} 
+                                onChange={(e) => setDraft({ ...draft, name: e.target.value })} 
+                            />
                         </div>
-                        <div>
-                            <div style={{ marginBottom: 8, color: 'var(--color-muted-foreground)' }}>Days of week (optional):</div>
-                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                        
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label className="form-label">
+                                    <Calendar size={18} />
+                                    Frequency
+                                </label>
+                                <select 
+                                    className="input habits-input" 
+                                    value={draft.frequency} 
+                                    onChange={(e) => setDraft({ ...draft, frequency: e.target.value })}
+                                >
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+                            
+                            {draft.frequency === 'daily' ? (
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        <Target size={18} />
+                                        Target per Day
+                                    </label>
+                                    <input 
+                                        className="input habits-input" 
+                                        type="number" 
+                                        min={1} 
+                                        max={20} 
+                                        value={draft.targetPerDay} 
+                                        onChange={(e) => setDraft({ ...draft, targetPerDay: Number(e.target.value) })} 
+                                    />
+                                </div>
+                            ) : (
+                                <div className="form-group">
+                                    <label className="form-label">
+                                        <TrendingUp size={18} />
+                                        Goal per Week
+                                    </label>
+                                    <input 
+                                        className="input habits-input" 
+                                        type="number" 
+                                        min={1} 
+                                        max={7} 
+                                        value={draft.goalPerWeek} 
+                                        onChange={(e) => setDraft({ ...draft, goalPerWeek: Number(e.target.value) })} 
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        
+                        <div className="form-group">
+                            <label className="form-label">
+                                <Calendar size={18} />
+                                Days of Week (Optional)
+                            </label>
+                            <div className="days-selector">
                                 {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
-                                    <label key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid var(--color-border)', borderRadius: 6, padding: '4px 8px' }}>
-                                        <input type="checkbox" checked={draft.daysOfWeek.includes(i)} onChange={(e) => {
-                                            const set = new Set(draft.daysOfWeek);
-                                            if (e.target.checked) set.add(i); else set.delete(i);
-                                            setDraft({ ...draft, daysOfWeek: Array.from(set).sort() });
-                                        }} />
-                                        {d}
+                                    <label 
+                                        key={i} 
+                                        className={`day-checkbox ${draft.daysOfWeek.includes(i) ? 'selected' : ''}`}
+                                    >
+                                        <input 
+                                            type="checkbox" 
+                                            checked={draft.daysOfWeek.includes(i)} 
+                                            onChange={(e) => {
+                                                const set = new Set(draft.daysOfWeek);
+                                                if (e.target.checked) set.add(i); else set.delete(i);
+                                                setDraft({ ...draft, daysOfWeek: Array.from(set).sort() });
+                                            }} 
+                                        />
+                                        <span>{d}</span>
                                     </label>
                                 ))}
                             </div>
                         </div>
-                        <button className="btn btn-primary" onClick={createHabit} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Plus size={18} /> Add Habit
+                        
+                        <button 
+                            className="btn btn-primary habits-submit-btn" 
+                            onClick={createHabit}
+                        >
+                            <Plus size={18} /> 
+                            <span>Add Habit</span>
                         </button>
-                        {error && <div style={{ color: 'crimson' }}>{error}</div>}
+                        
+                        {error && <div className="error-message">{error}</div>}
                     </div>
                 </div>
 
-                <div className="dashboard-section">
-                    <h2>My Habits</h2>
+                <div className="habits-list-section">
+                    <div className="habits-section-header">
+                        <CheckSquare className="section-icon" size={24} />
+                        <h2>My Habits</h2>
+                        {habits.length > 0 && (
+                            <span className="habits-count">{habits.length}</span>
+                        )}
+                    </div>
+                    
                     {loading ? (
-                        <div className="card" style={{ padding: '1rem' }}>Loading...</div>
+                        <div className="card habits-loading">
+                            <div className="loading-spinner"></div>
+                            <p>Loading your habits...</p>
+                        </div>
                     ) : habits.length === 0 ? (
-                        <div className="card" style={{ padding: '1rem', color: 'var(--color-muted-foreground)' }}>No habits yet.</div>
+                        <div className="card habits-empty">
+                            <CheckSquare size={48} className="empty-icon" />
+                            <h3>No habits yet</h3>
+                            <p>Start building your routine by creating your first habit above!</p>
+                        </div>
                     ) : (
-                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                        <div className="habits-grid">
                             {habits.map(h => (
-                                <div key={h.id} className={`card ${selected?.id === h.id ? 'active' : ''}`} style={{ padding: '1rem', cursor: 'pointer' }} onClick={async () => { setSelected(h); await loadStats(h.id); }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <CheckSquare size={18} />
-                                            <div>
-                                                <div style={{ fontWeight: 700 }}>{h.name}</div>
-                                                <div style={{ fontSize: 12, color: 'var(--color-muted-foreground)' }}>{h.frequency === 'daily' ? `Daily (target ${h.targetPerDay || 1}/day)` : `Weekly goal: ${h.goalPerWeek}`}</div>
-                                            </div>
+                                <div 
+                                    key={h.id} 
+                                    className={`card habit-card ${selected?.id === h.id ? 'active' : ''}`}
+                                    onClick={async () => { setSelected(h); await loadStats(h.id); }}
+                                >
+                                    <div className="habit-card-header">
+                                        <div className="habit-icon-wrapper">
+                                            <CheckSquare size={20} />
                                         </div>
-                                        <div style={{ display: 'flex', gap: 8 }}>
-                                            <button className="btn" onClick={(e) => { e.stopPropagation(); toggleToday(h); }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <RotateCw size={16} /> Toggle Today
-                                            </button>
-                                            <a className="btn" href={`/habits/${h.id}`} onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                Details
-                                            </a>
-                                            <button className="btn btn-danger" onClick={(e) => { e.stopPropagation(); deleteHabit(h.id); }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <Trash2 size={16} /> Delete
-                                            </button>
+                                        <div className="habit-info">
+                                            <h3 className="habit-name">{h.name}</h3>
+                                            <p className="habit-meta">
+                                                {h.frequency === 'daily' 
+                                                    ? `Daily • Target: ${h.targetPerDay || 1}/day` 
+                                                    : `Weekly • Goal: ${h.goalPerWeek}/week`}
+                                            </p>
                                         </div>
+                                    </div>
+                                    
+                                    <div className="habit-actions">
+                                        <button 
+                                            className="btn-icon habit-action-btn" 
+                                            onClick={(e) => { e.stopPropagation(); toggleToday(h); }}
+                                            title="Toggle Today"
+                                        >
+                                            <RotateCw size={16} />
+                                        </button>
+                                        <a 
+                                            className="btn-icon habit-action-btn" 
+                                            href={`/habits/${h.id}`} 
+                                            onClick={(e) => e.stopPropagation()}
+                                            title="View Details"
+                                        >
+                                            <TrendingUp size={16} />
+                                        </a>
+                                        <button 
+                                            className="btn-icon habit-action-btn danger" 
+                                            onClick={(e) => { e.stopPropagation(); deleteHabit(h.id); }}
+                                            title="Delete Habit"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </div>
                                 </div>
                             ))}
@@ -211,17 +319,40 @@ export default function Habits() {
             </div>
 
             {selected && stats && (
-                <div className="dashboard-section">
-                    <h2>Progress — {selected.name}</h2>
-                    <div className="card" style={{ padding: '1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                            <Trophy size={18} />
-                            <strong>Current streak: {stats.currentStreak} days</strong>
+                <div className="habits-progress-section">
+                    <div className="habits-section-header">
+                        <Trophy className="section-icon" size={24} />
+                        <h2>Progress — {selected.name}</h2>
+                    </div>
+                    <div className="card habits-progress-card">
+                        <div className="progress-stats">
+                            <div className="progress-stat">
+                                <Trophy size={24} className="stat-icon" />
+                                <div>
+                                    <div className="stat-value">{stats.currentStreak}</div>
+                                    <div className="stat-label">Day Streak</div>
+                                </div>
+                            </div>
+                            <div className="progress-stat">
+                                <Target size={24} className="stat-icon" />
+                                <div>
+                                    <div className="stat-value">{stats.totalCompletions || 0}</div>
+                                    <div className="stat-label">Total Completions</div>
+                                </div>
+                            </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(15, minmax(0, 1fr))', gap: 6 }}>
-                            {stats.lastNDays.map((d) => (
-                                <div key={d.date} title={d.date} style={{ height: 18, borderRadius: 4, background: d.done ? 'var(--color-primary)' : 'var(--color-border)' }} />
-                            ))}
+                        
+                        <div className="heatmap-container">
+                            <h4 className="heatmap-title">Last 30 Days</h4>
+                            <div className="heatmap-grid">
+                                {stats.lastNDays.map((d, idx) => (
+                                    <div 
+                                        key={d.date} 
+                                        className={`heatmap-day ${d.done ? 'completed' : ''}`}
+                                        title={`${d.date}: ${d.done ? 'Completed' : 'Not completed'}`}
+                                    />
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>

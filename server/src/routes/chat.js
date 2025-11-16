@@ -25,8 +25,8 @@ router.use((req, res, next) => {
 router.post('/message', authMiddleware, [
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 5000 }).withMessage('Message too long')
 ], async (req, res, next) => {
-  // Set request timeout to 15 seconds
-  req.setTimeout(15000);
+  // Set request timeout to 45 seconds for better reliability
+  req.setTimeout(45000);
   
   try {
     logger.info('Chat message POST route handler executing', { 
@@ -46,9 +46,10 @@ router.post('/message', authMiddleware, [
 
     logger.info('Chat message received and validated', { userId, messageLength: message.length });
 
-    // Create a timeout promise for the entire operation
+    // Create a timeout promise for the entire operation (30 seconds)
+    // This should be sufficient now that initialization has proper timeout handling
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), 12000); // 12 second timeout
+      setTimeout(() => reject(new Error('Request timeout')), 30000);
     });
 
     const processingPromise = agent.processMessage(userId, message);
