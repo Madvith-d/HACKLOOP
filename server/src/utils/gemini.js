@@ -1,11 +1,14 @@
 const { ChatGoogleGenerativeAI } = require('@langchain/google-genai');
 const { HumanMessage, SystemMessage } = require('@langchain/core/messages');
 const logger = require('./logger');
+const fs = require('fs');
+const path = require('path');
 
 class GeminiService {
   constructor() {
     this.model = null;
     this.initialized = false;
+    this.systemPromptTemplate = null;
   }
 
   async initialize() {
@@ -36,6 +39,19 @@ class GeminiService {
           maxOutputTokens: 1024,
           apiKey: apiKey
         });
+
+        // Load system prompt
+        try {
+          const promptPath = path.join(__dirname, '../../prompts/empathetic_response.txt');
+          if (fs.existsSync(promptPath)) {
+            this.systemPromptTemplate = fs.readFileSync(promptPath, 'utf8');
+            logger.info('✅ Loaded empathetic system prompt');
+          } else {
+            logger.warn('⚠️ Empathetic system prompt file not found, using default');
+          }
+        } catch (err) {
+          logger.error('❌ Failed to load system prompt:', err);
+        }
 
         // Test the model with a simple call to verify it works
         try {
@@ -160,46 +176,72 @@ Be accurate and empathetic. Only return valid JSON.`;
       return this.fallbackResponse(state);
     }
 
-    const { userMessage, emotionalAnalysis, contextualData, recommendation } = state;
+    const { userMessage, emotionalAnalysis, contextualData, recommendation, chatHistory } = state;
 
-    const systemPrompt = `You are an empathetic mental health support AI assistant. Your role is to:
-1. Listen actively and validate the user's feelings
-2. Provide supportive, non-judgmental responses
-3. Offer helpful suggestions based on their emotional state
-4. Be warm, understanding, and encouraging
+    // Log history for debugging
+    logger.info('Generating response with chat history', {
+      historyLength: chatHistory?.length || 0,
+      hasHistory: !!(chatHistory && chatHistory.length > 0)
+    });
 
-Guidelines:
-- Never diagnose or provide medical advice
-- Always encourage professional help for serious concerns
-- Use a warm, conversational tone
-- Keep responses concise (2-4 sentences)
-- Show empathy and understanding`;
-
-    // OPTIMIZATION: Reduce context information to minimize tokens
-    let contextInfo = '';
-    if (contextualData?.userHistory) {
-      const history = contextualData.userHistory;
-      const hasData = (history.journalEntries?.length || 0) > 0 ||
-        (history.habits?.length || 0) > 0 ||
-        (history.recentEmotions?.length || 0) > 0;
-      if (hasData) {
-        contextInfo = `\n\nUser has ${history.journalEntries?.length || 0} journals, ${history.habits?.length || 0} habits, ${history.recentEmotions?.length || 0} recent emotions.`;
-      }
+    // Prepare context from memory with clear formatting
+    let chatHistoryText = "";
+    if (chatHistory && chatHistory.length > 0) {
+      chatHistoryText = "\n\nChat History:\n" + chatHistory.map(m =>
+        `${m.role === 'user' ? 'User' : 'MindMesh'}: ${m.content}`
+      ).join('\n') + "\n";
     }
 
-    let recommendationInfo = '';
+    // Prepare recommendation info
+    let recommendationInfo = "None";
     if (recommendation?.actions?.length > 0) {
-      recommendationInfo = `\n\nSuggested: ${recommendation.actions.join(', ')}`;
+      recommendationInfo = recommendation.actions.join(', ');
     }
 
-    const userPrompt = `User: "${userMessage}"${contextInfo}${recommendationInfo}
+    // Prepare emotion info
+    let emotionInfo = "Neutral";
+    if (emotionalAnalysis?.emotionScores) {
+      const topEmotions = Object.entries(emotionalAnalysis.emotionScores)
+        .filter(([_, score]) => score > 0.3)
+        .sort(([_, a], [__, b]) => b - a)
+        .map(([e, s]) => `${e} (${(s * 100).toFixed(0)}%)`)
+        .join(', ');
+      if (topEmotions) emotionInfo = topEmotions;
+    }
 
-Respond with empathy and support (2-4 sentences).`;
+    // Build comprehensive prompt
+    const systemPrompt = `You are MindMesh, an empathetic mental wellness companion.
+Your job is to support the user emotionally, continue the conversation, and guide them step-by-step.
+
+Always:
+- Respond with deep empathy and validation.
+- Reference previous conversation context when relevant.
+- Ask a gentle, open-ended follow-up question.
+- Never give generic short replies.
+- Never end the conversation abruptly.
+- If actions (journal/habit/therapist) are recommended, smoothly weave them into the conversation instead of replacing it.
+
+Tone must be calm, safe, and human.`;
+
+    // Construct the full conversational prompt
+    const fullPrompt = `${systemPrompt}${chatHistoryText}
+Current User Message:
+User: ${userMessage}
+
+Detected Emotion: ${emotionInfo}
+Recommendation: ${recommendationInfo}
+
+MindMesh (respond with empathy, reference chat history if available, and ask a follow-up question):`;
+
+    logger.debug('Full prompt constructed', {
+      promptLength: fullPrompt.length,
+      includesHistory: fullPrompt.includes('Chat History')
+    });
 
     try {
+      // Use a single HumanMessage with the complete context
       const messages = [
-        new SystemMessage(systemPrompt),
-        new HumanMessage(userPrompt)
+        new HumanMessage(fullPrompt)
       ];
 
       // Increased timeout to 25 seconds

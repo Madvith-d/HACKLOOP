@@ -27,9 +27,9 @@ router.post('/message', authMiddleware, [
 ], async (req, res, next) => {
   // Set request timeout to 45 seconds for better reliability
   req.setTimeout(45000);
-  
+
   try {
-    logger.info('Chat message POST route handler executing', { 
+    logger.info('Chat message POST route handler executing', {
       userId: req.user?.id,
       messageLength: req.body?.message?.length,
       messagePreview: req.body?.message?.substring(0, 50)
@@ -88,12 +88,13 @@ router.post('/message', authMiddleware, [
       chatId: chatPersisted ? chatId : null,
       response: safeResponse,
       recommendation: result.recommendation,
+      action: result.recommendation?.action || null, // Explicitly send action
       emotionalAnalysis: result.emotionalAnalysis,
       therapistAlert: result.therapistAlert || false
     });
   } catch (error) {
     logger.error('Error processing chat message:', error);
-    
+
     // If it's a timeout, return a quick fallback response
     if (error.message === 'Request timeout') {
       return res.json({
@@ -105,7 +106,7 @@ router.post('/message', authMiddleware, [
         therapistAlert: false
       });
     }
-    
+
     next(error);
   }
 });
@@ -114,9 +115,9 @@ router.post('/stream', authMiddleware, [
   body('message').trim().notEmpty().withMessage('Message is required')
 ], async (req, res, next) => {
   try {
-    logger.info('Chat /stream endpoint hit', { 
+    logger.info('Chat /stream endpoint hit', {
       userId: req.user?.id,
-      messageLength: req.body?.message?.length 
+      messageLength: req.body?.message?.length
     });
 
     const errors = validationResult(req);
@@ -201,13 +202,13 @@ router.get('/agent-info', (req, res) => {
 
 // Test endpoint to verify connectivity (no auth required)
 router.get('/test', (req, res) => {
-  logger.info('Chat test endpoint hit', { 
+  logger.info('Chat test endpoint hit', {
     ip: req.ip,
     userAgent: req.get('User-Agent'),
     headers: req.headers
   });
-  res.json({ 
-    success: true, 
+  res.json({
+    success: true,
     message: 'Chat API is reachable',
     timestamp: new Date().toISOString(),
     path: req.path

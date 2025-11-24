@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic, MicOff, VolumeX, Send, Bot } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 
 export default function Chat() {
-    console.log('[Chat] Component rendering');
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [transcript, setTranscript] = useState('');
@@ -26,7 +26,7 @@ export default function Chat() {
     const textInputRef = useRef(null);
     const { user } = useApp();
     const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-    
+
     console.log('[Chat] API_BASE_URL:', API_BASE_URL);
     console.log('[Chat] User:', user);
 
@@ -63,20 +63,45 @@ export default function Chat() {
 
     // Fallback response generator (used when API fails)
     const generateFallbackResponse = (userMessage) => {
-        const lowerMessage = userMessage.toLowerCase();
-        
-        if (lowerMessage.includes('anxious') || lowerMessage.includes('anxiety')) {
-            return "I understand you're feeling anxious. Remember, anxiety is a natural response. Let's try some deep breathing together. Breathe in slowly for 4 counts, hold for 4, and exhale for 4. You're doing great.";
-        } else if (lowerMessage.includes('stress') || lowerMessage.includes('stressed')) {
-            return "Stress can be overwhelming. Have you tried breaking down your tasks into smaller, manageable steps? Sometimes just talking about what's stressing you can help lighten the load.";
-        } else if (lowerMessage.includes('sad') || lowerMessage.includes('down')) {
-            return "I'm here for you. It's okay to feel sad sometimes. Your feelings are valid. Would you like to talk about what's making you feel this way?";
-        } else if (lowerMessage.includes('happy') || lowerMessage.includes('good') || lowerMessage.includes('great')) {
-            return "That's wonderful to hear! I'm so glad you're feeling good. What's been bringing you joy lately?";
-        } else if (lowerMessage.includes('help') || lowerMessage.includes('need')) {
-            return "I'm here to help you. Tell me what's on your mind, and we'll work through it together. Remember, seeking help is a sign of strength.";
-        } else {
-            return "Thank you for sharing that with me. Your feelings matter. Can you tell me more about how you're feeling right now?";
+        // Backend handles all responses now - only use this for actual errors
+        return "I'm having trouble connecting right now. Please try again.";
+    };
+
+    const navigate = useNavigate(); // Add navigation hook
+
+    // Handle agent actions based on structured response
+    const handleAgentAction = (action) => {
+        if (!action) return;
+
+        console.log('[Chat] Handling agent action:', action);
+
+        switch (action.type) {
+            case 'journal':
+                // Navigate to journal with prompt
+                // We'll pass the prompt via state or query param
+                // For now, let's assume passing state works with the router setup
+                navigate('/journal', { state: { prompt: action.payload.prompt } });
+                break;
+
+            case 'habit':
+                // Navigate to habits page
+                // Ideally we'd open a modal to create the specific habit
+                // passing the payload to pre-fill the form
+                navigate('/habits', { state: { suggestedHabit: action.payload } });
+                break;
+
+            case 'alert_therapist':
+                // Navigate to crisis support or therapist page
+                navigate('/crisis', { state: { alert: action.payload } });
+                break;
+
+            case 'suggest_therapy':
+                // Navigate to therapist list
+                navigate('/therapists', { state: { suggestion: action.payload } });
+                break;
+
+            default:
+                console.warn('[Chat] Unknown action type:', action.type);
         }
     };
 
@@ -84,23 +109,16 @@ export default function Chat() {
     const getAIResponse = async (userMessage) => {
         console.log('[Chat] getAIResponse called with message:', userMessage);
         const token = localStorage.getItem('authToken');
-        
+
         if (!token) {
             console.warn('[Chat] No auth token found, using fallback response');
             const fallback = generateFallbackResponse(userMessage);
             console.log('[Chat] Fallback response:', fallback);
-            return fallback;
+            return { response: fallback, action: null };
         }
 
         const url = `${API_BASE_URL}/api/chat/message`;
         console.log('[Chat] Making API request to:', url);
-        console.log('[Chat] Request details:', {
-            method: 'POST',
-            url: url,
-            hasToken: !!token,
-            tokenLength: token.length,
-            messageLength: userMessage.length
-        });
 
         try {
             const response = await fetch(url, {
@@ -112,79 +130,24 @@ export default function Chat() {
                 body: JSON.stringify({ message: userMessage })
             });
 
-            console.log('[Chat] API response received:', {
-                status: response.status,
-                statusText: response.statusText,
-                headers: Object.fromEntries(response.headers.entries())
-            });
-
             if (!response.ok) {
-                let errorText;
-                try {
-                    errorText = await response.text();
-                    console.error('[Chat] API request failed - response text:', errorText);
-                    // Try to parse as JSON for better error message
-                    try {
-                        const errorJson = JSON.parse(errorText);
-                        console.error('[Chat] Parsed error JSON:', errorJson);
-                        throw new Error(`API request failed: ${errorJson.error || errorJson.message || errorText}`);
-                    } catch (parseError) {
-                        throw new Error(`API request failed with status ${response.status}: ${errorText}`);
-                    }
-                } catch (textError) {
-                    console.error('[Chat] Error reading error response:', textError);
-                    throw new Error(`API request failed with status ${response.status}`);
-                }
+                throw new Error(`API request failed with status ${response.status}`);
             }
 
             const data = await response.json();
             console.log('[Chat] API response data:', data);
-            
+
             if (data.success && data.response) {
-                console.log('[Chat] Returning API response:', data.response);
-                return data.response;
+                return {
+                    response: data.response,
+                    action: data.action || data.recommendation?.action
+                };
             } else {
-                console.error('[Chat] Invalid response format:', data);
                 throw new Error('Invalid response format from API');
             }
         } catch (error) {
-            // Check if it's a network error
-            if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                console.error('[Chat] Network error - backend may not be reachable:', error);
-                console.error('[Chat] Check if backend is running at:', API_BASE_URL);
-                throw new Error(`Cannot connect to backend server at ${API_BASE_URL}. Please check if the server is running.`);
-            }
-            
             console.error('[Chat] Error calling chat API:', error);
-            console.error('[Chat] Error details:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-            });
-            throw error; // Re-throw to let caller handle it
-        }
-    };
-
-    const speak = (text) => {
-        if (synthRef.current) {
-            synthRef.current.cancel();
-            
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.rate = 0.9;
-            utterance.pitch = 1.1;
-            utterance.volume = 1;
-            
-            const voices = synthRef.current.getVoices();
-            const femaleVoice = voices.find(voice => 
-                voice.name.includes('Female') || voice.name.includes('female') ||
-                voice.name.includes('Samantha') || voice.name.includes('Karen')
-            );
-            if (femaleVoice) utterance.voice = femaleVoice;
-            
-            utterance.onstart = () => setIsSpeaking(true);
-            utterance.onend = () => setIsSpeaking(false);
-            
-            synthRef.current.speak(utterance);
+            throw error;
         }
     };
 
@@ -192,92 +155,95 @@ export default function Chat() {
         console.log('[Chat] handleUserSpeech called with text:', text);
         const userMsg = { role: 'user', content: text, timestamp: new Date() };
         setConversation(prev => [...prev, userMsg]);
-        
+
         setIsTyping(true);
-        console.log('[Chat] Set typing to true for speech');
-        
+
         try {
-            console.log('[Chat] Calling getAIResponse for speech...');
-            const aiResponse = await getAIResponse(text);
-            console.log('[Chat] Received AI response for speech:', aiResponse);
-            
+            const { response: aiResponse, action } = await getAIResponse(text);
+
             const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
             setIsTyping(false);
             setConversation(prev => [...prev, aiMsg]);
             setAvatarText(aiResponse);
-            speak(aiResponse);
-            console.log('[Chat] handleUserSpeech completed successfully');
+
+            // Speak and handle action safely without breaking the flow
+            try {
+                speak(aiResponse);
+            } catch (speakError) {
+                console.warn('[Chat] Speech synthesis failed:', speakError);
+            }
+
+            if (action) {
+                try {
+                    handleAgentAction(action);
+                } catch (actionError) {
+                    console.warn('[Chat] Action handling failed:', actionError);
+                }
+            }
         } catch (error) {
             console.error('[Chat] Error handling user speech:', error);
             setIsTyping(false);
-            
+
             const fallbackResponse = generateFallbackResponse(text);
-            console.log('[Chat] Using fallback for speech:', fallbackResponse);
-            
-            // Just add fallback response without scary error message
-            const errorAiMsg = { 
-                role: 'ai', 
-                content: fallbackResponse, 
-                timestamp: new Date() 
-            };
+            const errorAiMsg = { role: 'ai', content: fallbackResponse, timestamp: new Date() };
             setConversation(prev => [...prev, errorAiMsg]);
             setAvatarText(fallbackResponse);
-            speak(fallbackResponse);
+
+            try {
+                speak(fallbackResponse);
+            } catch (speakError) {
+                console.warn('[Chat] Speech synthesis failed:', speakError);
+            }
         }
     };
 
     const handleTextSubmit = async (e) => {
         e.preventDefault();
-        console.log('[Chat] handleTextSubmit called');
-        console.log('[Chat] textInput:', textInput);
-        console.log('[Chat] isSpeaking:', isSpeaking);
-        
-        if (!textInput.trim() || isSpeaking) {
-            console.log('[Chat] Early return - empty input or speaking');
-            return;
-        }
-        
+
+        if (!textInput.trim() || isSpeaking) return;
+
         const userMessage = textInput.trim();
-        console.log('[Chat] Processing message:', userMessage);
-        
         const userMsg = { role: 'user', content: userMessage, timestamp: new Date() };
-        setConversation(prev => {
-            console.log('[Chat] Adding user message to conversation');
-            return [...prev, userMsg];
-        });
+        setConversation(prev => [...prev, userMsg]);
         setTextInput('');
         setIsTyping(true);
-        console.log('[Chat] Set typing to true');
-        
+
         try {
-            console.log('[Chat] Calling getAIResponse...');
-            const aiResponse = await getAIResponse(userMessage);
-            console.log('[Chat] Received AI response:', aiResponse);
-            
+            const { response: aiResponse, action } = await getAIResponse(userMessage);
+
             const aiMsg = { role: 'ai', content: aiResponse, timestamp: new Date() };
             setIsTyping(false);
-            console.log('[Chat] Set typing to false, adding AI message');
             setConversation(prev => [...prev, aiMsg]);
             setAvatarText(aiResponse);
-            speak(aiResponse);
-            console.log('[Chat] handleTextSubmit completed successfully');
+
+            // Speak and handle action safely without breaking the flow
+            try {
+                speak(aiResponse);
+            } catch (speakError) {
+                console.warn('[Chat] Speech synthesis failed:', speakError);
+            }
+
+            if (action) {
+                try {
+                    handleAgentAction(action);
+                } catch (actionError) {
+                    console.warn('[Chat] Action handling failed:', actionError);
+                }
+            }
         } catch (error) {
             console.error('[Chat] Error in handleTextSubmit:', error);
             setIsTyping(false);
-            
-            // Use fallback response
+
             const fallbackResponse = generateFallbackResponse(userMessage);
-            console.log('[Chat] Using fallback in catch block:', fallbackResponse);
-            
-            // Just add fallback response without scary error message
-            const errorAiMsg = { 
-                role: 'ai', 
-                content: fallbackResponse, 
-                timestamp: new Date() 
-            };
+            const errorAiMsg = { role: 'ai', content: fallbackResponse, timestamp: new Date() };
             setConversation(prev => [...prev, errorAiMsg]);
             setAvatarText(fallbackResponse);
-            speak(fallbackResponse);
+
+            try {
+                speak(fallbackResponse);
+            } catch (speakError) {
+                console.warn('[Chat] Speech synthesis failed:', speakError);
+            }
         }
     };
 
@@ -291,7 +257,7 @@ export default function Chat() {
 
     const saveConversation = () => {
         if (conversation.length === 0) return;
-        
+
         const sessionId = Date.now();
         const session = {
             id: sessionId,
@@ -299,7 +265,7 @@ export default function Chat() {
             messages: [...conversation],
             date: new Date()
         };
-        
+
         setConversationHistory(prev => [session, ...prev]);
         setConversation([]);
         setAvatarText('Hi! I\'m Maya, your wellness companion. Talk to me or type below!');
@@ -418,13 +384,13 @@ export default function Chat() {
     return (
         <div className={`gamified-chat-page ${isFullscreen ? 'fullscreen-mode' : ''}`}>
             {/* Mobile Sidebar Overlay */}
-            <div 
+            <div
                 className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
             />
-            
+
             {/* Mobile Sidebar Toggle Button */}
-            <button 
+            <button
                 className="mobile-sidebar-toggle"
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 title="Toggle sidebar"
@@ -432,7 +398,7 @@ export default function Chat() {
             >
                 ☰
             </button>
-            
+
             {showShortcuts && (
                 <div className="shortcuts-overlay" onClick={() => setShowShortcuts(false)}>
                     <div className="shortcuts-modal" onClick={(e) => e.stopPropagation()}>
@@ -467,20 +433,20 @@ export default function Chat() {
                     </div>
                 </div>
             )}
-            <button 
+            <button
                 className="fullscreen-toggle-btn"
                 onClick={() => setIsFullscreen(!isFullscreen)}
                 title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
             >
                 {isFullscreen ? '⊟' : '⊞'}
             </button>
-            <button 
+            <button
                 className="shortcuts-hint-btn"
                 onClick={() => setShowShortcuts(true)}
                 title="Keyboard shortcuts (Ctrl + /)">
                 ⌨️
             </button>
-            
+
             <div className="chat-layout">
                 <div className={`chat-sidebar ${sidebarOpen ? 'open' : ''}`}>
                     <div className="sidebar-header-chat">
@@ -491,17 +457,17 @@ export default function Chat() {
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <button 
-                                className="new-chat-btn" 
+                            <button
+                                className="new-chat-btn"
                                 onClick={() => {
                                     startNewChat();
                                     setSidebarOpen(false);
-                                }} 
+                                }}
                                 title="New Chat (Ctrl+N)"
                             >
                                 +
                             </button>
-                            <button 
+                            <button
                                 className="mobile-sidebar-close"
                                 onClick={() => setSidebarOpen(false)}
                                 title="Close sidebar"
@@ -511,7 +477,7 @@ export default function Chat() {
                             </button>
                         </div>
                     </div>
-                    
+
                     <div className="sessions-list">
                         {conversationHistory.length === 0 ? (
                             <div className="empty-sessions">
@@ -521,8 +487,8 @@ export default function Chat() {
                             </div>
                         ) : (
                             conversationHistory.map((session) => (
-                                <div 
-                                    key={session.id} 
+                                <div
+                                    key={session.id}
                                     className={`session-card ${selectedSession?.id === session.id ? 'active' : ''}`}
                                     onClick={() => {
                                         loadConversation(session);
@@ -534,7 +500,7 @@ export default function Chat() {
                                         <p>{new Date(session.date).toLocaleDateString()}</p>
                                         <span className="message-count">{session.messages.length} messages</span>
                                     </div>
-                                    <button 
+                                    <button
                                         className="delete-session-btn"
                                         onClick={(e) => {
                                             e.stopPropagation();
@@ -548,10 +514,10 @@ export default function Chat() {
                             ))
                         )}
                     </div>
-                    
+
                     {conversation.length > 0 && (
-                        <button 
-                            className="save-conversation-btn" 
+                        <button
+                            className="save-conversation-btn"
                             onClick={() => {
                                 saveConversation();
                                 setSidebarOpen(false);
@@ -595,21 +561,21 @@ export default function Chat() {
                                                 </div>
                                                 {msg.role === 'ai' && (
                                                     <div className="message-actions">
-                                                        <button 
+                                                        <button
                                                             className="message-action-btn"
                                                             onClick={() => copyMessage(msg.content)}
                                                             title="Copy message"
                                                         >
                                                             📋
                                                         </button>
-                                                        <button 
+                                                        <button
                                                             className="message-action-btn"
                                                             onClick={() => giveFeedback(index, true)}
                                                             title="Helpful"
                                                         >
                                                             👍
                                                         </button>
-                                                        <button 
+                                                        <button
                                                             className="message-action-btn"
                                                             onClick={() => giveFeedback(index, false)}
                                                             title="Not helpful"
@@ -621,7 +587,7 @@ export default function Chat() {
                                             </div>
                                         </div>
                                     ))}
-                                    
+
                                     {/* Typing Indicator */}
                                     {isTyping && (
                                         <div className="chat-message ai typing-message">
@@ -647,8 +613,8 @@ export default function Chat() {
                             <div className="listening-animation">
                                 <div className="voice-visualizer">
                                     {[...Array(5)].map((_, i) => (
-                                        <div 
-                                            key={i} 
+                                        <div
+                                            key={i}
                                             className="voice-bar"
                                             style={{
                                                 height: `${Math.max(20, audioLevel * (0.5 + Math.random() * 0.5))}%`,
@@ -660,9 +626,9 @@ export default function Chat() {
                                 <span>Listening...</span>
                             </div>
                         )}
-                        
+
                         <form onSubmit={handleTextSubmit} className="input-form">
-                            <button 
+                            <button
                                 type="button"
                                 className={`mic-button ${isListening ? 'active' : ''}`}
                                 onClick={toggleListening}
@@ -671,8 +637,8 @@ export default function Chat() {
                             >
                                 {isListening ? <MicOff size={20} /> : <Mic size={20} />}
                             </button>
-                            
-                            <input 
+
+                            <input
                                 ref={textInputRef}
                                 type="text"
                                 className="text-input-field"
@@ -681,8 +647,8 @@ export default function Chat() {
                                 onChange={(e) => setTextInput(e.target.value)}
                                 disabled={isSpeaking || isListening}
                             />
-                            
-                            <button 
+
+                            <button
                                 type="submit"
                                 className="send-button"
                                 disabled={!textInput.trim() || isSpeaking || isListening}
@@ -697,9 +663,9 @@ export default function Chat() {
                             >
                                 <Send size={18} />
                             </button>
-                            
+
                             {isSpeaking && (
-                                <button 
+                                <button
                                     type="button"
                                     className="stop-speaking-btn"
                                     onClick={stopSpeaking}

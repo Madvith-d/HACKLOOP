@@ -14,6 +14,7 @@ class EmpatheticChatAgent {
   constructor() {
     this.initialized = false;
     this.runnable = null;
+    this.sessionMemory = {}; // In-memory session store: { userId: [ { role, content, emotion, priority } ] }
   }
 
   async initialize() {
@@ -58,6 +59,10 @@ class EmpatheticChatAgent {
         response: {
           value: (x, y) => y ? y : x,
           default: () => ""
+        },
+        chatHistory: {
+          value: (x, y) => y ? y : x,
+          default: () => []
         }
       }
     });
@@ -68,20 +73,9 @@ class EmpatheticChatAgent {
     workflow.addNode("generateRecommendation", recommendationNode);
     workflow.addNode("checkTherapistAlert", therapistAlertNode);
     workflow.addNode("generateResponse", responseGenerationNode);
-    // Embedding is a side effect, we can run it parallel or after response, 
-    // but for the graph flow, let's keep it simple. 
-    // In the original code it was backgrounded. We can keep it that way or add it to the graph.
-    // For now, let's add it as a node that runs but doesn't block the main flow if we branch.
-    // However, LangGraph is sequential by default unless we use parallel branches.
 
     // Define edges
-    // Parallel execution of emotion analysis and context retrieval
     workflow.setEntryPoint("analyzeEmotion");
-
-    // We want analyzeEmotion and retrieveContext to run in parallel?
-    // LangGraph supports this by having the entry point point to multiple nodes?
-    // Or we can just chain them for simplicity if parallel isn't strictly required for the graph structure.
-    // Let's chain them for now to ensure state is passed correctly.
 
     workflow.addEdge("analyzeEmotion", "retrieveContext");
     workflow.addEdge("retrieveContext", "generateRecommendation");
@@ -95,15 +89,49 @@ class EmpatheticChatAgent {
     this.initialized = true;
   }
 
+  pushToMemory(userId, userMessage, assistantReply, emotion, priority) {
+    if (!this.sessionMemory[userId]) {
+      this.sessionMemory[userId] = [];
+    }
+
+    // Add user message
+    this.sessionMemory[userId].push({
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date().toISOString()
+    });
+
+    // Add assistant reply with metadata
+    this.sessionMemory[userId].push({
+      role: 'assistant',
+      content: assistantReply,
+      emotion: emotion,
+      priority: priority,
+      timestamp: new Date().toISOString()
+    });
+
+    // Prune memory to keep last 10 turns (20 messages)
+    if (this.sessionMemory[userId].length > 20) {
+      this.sessionMemory[userId] = this.sessionMemory[userId].slice(-20);
+    }
+  }
+
+  getMemory(userId) {
+    return this.sessionMemory[userId] || [];
+  }
+
   async processMessage(userId, message) {
     await this.initialize();
 
     logger.info('Processing message for user:', { userId, messageLength: message.length });
 
+    const chatHistory = this.getMemory(userId);
+
     const initialState = {
       userId,
       userMessage: message,
-      messages: []
+      messages: [],
+      chatHistory
     };
 
     try {
@@ -113,6 +141,15 @@ class EmpatheticChatAgent {
       // Background embedding generation (fire and forget)
       generateEmbeddingNode(finalState).catch(err =>
         logger.error('Background embedding generation failed:', err)
+      );
+
+      // Update memory
+      this.pushToMemory(
+        userId,
+        message,
+        finalState.response,
+        finalState.emotionalAnalysis,
+        finalState.recommendation?.priority
       );
 
       logger.info('Message processing completed successfully', {
@@ -141,10 +178,13 @@ class EmpatheticChatAgent {
   async streamMessage(userId, message, onChunk) {
     await this.initialize();
 
+    const chatHistory = this.getMemory(userId);
+
     const initialState = {
       userId,
       userMessage: message,
-      messages: []
+      messages: [],
+      chatHistory
     };
 
     let finalState = initialState;
@@ -186,6 +226,15 @@ class EmpatheticChatAgent {
       // Background embedding
       generateEmbeddingNode(finalState).catch(err =>
         logger.error('Background embedding generation failed:', err)
+      );
+
+      // Update memory
+      this.pushToMemory(
+        userId,
+        message,
+        finalState.response,
+        finalState.emotionalAnalysis,
+        finalState.recommendation?.priority
       );
 
       return {

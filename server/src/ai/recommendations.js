@@ -4,9 +4,11 @@ class RecommendationEngine {
   analyzeEmotionalState(text, emotionalAnalysis) {
     const keywords = this.extractEmotionalKeywords(text);
     const sentiment = emotionalAnalysis?.sentiment || this.analyzeSentiment(text);
-    
+
+    // Default recommendation structure
     let recommendation = {
-      actions: [],
+      actions: [], // Keep for backward compatibility if needed, or remove if fully migrating
+      action: null, // New structured action
       priority: 'low',
       reasoning: ''
     };
@@ -16,37 +18,180 @@ class RecommendationEngine {
     const anxiety = emotionScores.anxiety || 0;
     const anger = emotionScores.anger || 0;
     const fear = emotionScores.fear || 0;
+    const hopelessness = emotionScores.hopelessness || 0;
 
-    if (sadness > 0.7 || sentiment < -0.7) {
-      recommendation.actions.push('SUGGEST_JOURNAL');
-      recommendation.reasoning = 'User shows signs of sadness, journaling could help process emotions';
+    // PRIORITY 0: Conversational Intent Detection (check first!)
+    const explicitIntent = this.detectExplicitIntent(text);
+    if (explicitIntent) {
+      logger.info('Explicit intent detected:', explicitIntent.type);
+      return explicitIntent;
     }
 
-    if (anxiety > 0.6) {
-      recommendation.actions.push('SUGGEST_HABIT');
-      recommendation.reasoning = 'User shows anxiety, building calming habits might help';
-    }
-
+    // Priority 1: Crisis Detection (Highest Priority)
     if (this.detectCrisisIndicators(text, emotionalAnalysis)) {
-      recommendation.actions.push('ALERT_THERAPIST');
+      recommendation.action = {
+        type: 'alert_therapist',
+        payload: {
+          recommend: true,
+          alertType: 'CRISIS',
+          reason: 'Crisis indicators detected'
+        }
+      };
       recommendation.priority = 'critical';
       recommendation.reasoning = 'User showing crisis indicators, therapist alert issued';
-      recommendation.alertType = 'CRISIS';
-    } else if (sadness > 0.8 || (anxiety > 0.7 && fear > 0.6)) {
-      recommendation.actions.push('SUGGEST_THERAPY');
-      recommendation.priority = 'high';
-      recommendation.reasoning = 'User showing severe emotional distress, therapy session recommended';
-    } else if (anxiety > 0.6 || sadness > 0.6) {
-      recommendation.actions.push('SUGGEST_THERAPY');
-      recommendation.priority = 'medium';
-      recommendation.reasoning = 'User could benefit from professional support';
+      recommendation.actions.push('ALERT_THERAPIST'); // Backward compat
+
+      if (keywords.length > 0) recommendation.keywords = keywords;
+      return recommendation;
     }
 
+    // Priority 2: High Distress -> Therapy Suggestion
+    if (sadness > 0.8 || (anxiety > 0.7 && fear > 0.6) || hopelessness > 0.6) {
+      recommendation.action = {
+        type: 'suggest_therapy',
+        payload: {
+          reason: 'High emotional distress detected',
+          specialization: anxiety > sadness ? 'anxiety' : 'depression'
+        }
+      };
+      recommendation.priority = 'high';
+      recommendation.reasoning = 'User showing severe emotional distress, therapy session recommended';
+      recommendation.actions.push('SUGGEST_THERAPY'); // Backward compat
+
+      if (keywords.length > 0) recommendation.keywords = keywords;
+      return recommendation;
+    }
+
+    // Priority 3: Moderate Anxiety/Stress -> Habit Suggestion
+    if (anxiety > 0.6 || fear > 0.5) {
+      const habit = this.generateHabitSuggestion({ emotionScores });
+      recommendation.action = {
+        type: 'habit',
+        payload: {
+          habitName: habit.name,
+          description: habit.description,
+          frequency: habit.frequency,
+          duration: '5-10 minutes'
+        }
+      };
+      recommendation.priority = 'medium';
+      recommendation.reasoning = 'User shows anxiety, building calming habits might help';
+      recommendation.actions.push('SUGGEST_HABIT'); // Backward compat
+
+      if (keywords.length > 0) recommendation.keywords = keywords;
+      return recommendation;
+    }
+
+    // Priority 4: Sadness/Reflection -> Journal Suggestion
+    if (sadness > 0.5 || sentiment < -0.5) {
+      const prompt = this.generateJournalPrompt({ emotionScores });
+      recommendation.action = {
+        type: 'journal',
+        payload: {
+          prompt: prompt,
+          category: 'Reflection'
+        }
+      };
+      recommendation.priority = 'medium';
+      recommendation.reasoning = 'User shows signs of sadness, journaling could help process emotions';
+      recommendation.actions.push('SUGGEST_JOURNAL'); // Backward compat
+
+      if (keywords.length > 0) recommendation.keywords = keywords;
+      return recommendation;
+    }
+
+    // Default: No specific action, just chat
     if (keywords.length > 0) {
       recommendation.keywords = keywords;
     }
 
     return recommendation;
+  }
+
+  /**
+   * Detect explicit user intents from conversational requests
+   * e.g., "how do I journal?", "I want to talk to a therapist"
+   */
+  detectExplicitIntent(text) {
+    const lowerText = text.toLowerCase();
+
+    // Journal intent patterns
+    const journalPatterns = [
+      'journal', 'write', 'journaling', 'write down', 'write about',
+      'start journaling', 'how to journal', 'help me write'
+    ];
+
+    for (const pattern of journalPatterns) {
+      if (lowerText.includes(pattern)) {
+        const prompt = this.generateJournalPrompt({});
+        return {
+          action: {
+            type: 'open_journal',
+            payload: {
+              prompt: prompt,
+              redirect: '/journal',
+              category: 'User Initiated'
+            }
+          },
+          actions: ['SUGGEST_JOURNAL'],
+          priority: 'medium',
+          reasoning: 'User explicitly requested journaling'
+        };
+      }
+    }
+
+    // Therapy intent patterns
+    const therapyPatterns = [
+      'therapist', 'therapy', 'counselor', 'counseling', 'talk to someone',
+      'professional help', 'see a therapist', 'book a session', 'schedule therapy'
+    ];
+
+    for (const pattern of therapyPatterns) {
+      if (lowerText.includes(pattern)) {
+        return {
+          action: {
+            type: 'suggest_therapy',
+            payload: {
+              reason: 'User requested therapy',
+              specialization: 'general',
+              redirect: '/therapists'
+            }
+          },
+          actions: ['SUGGEST_THERAPY'],
+          priority: 'high',
+          reasoning: 'User explicitly requested therapy'
+        };
+      }
+    }
+
+    // Habit/routine intent patterns
+    const habitPatterns = [
+      'habit', 'routine', 'build a habit', 'start a habit', 'exercise',
+      'meditation', 'mindfulness', 'breathing', 'practice'
+    ];
+
+    for (const pattern of habitPatterns) {
+      if (lowerText.includes(pattern)) {
+        const habit = this.generateHabitSuggestion({});
+        return {
+          action: {
+            type: 'suggest_habit',
+            payload: {
+              habitName: habit.name,
+              description: habit.description,
+              frequency: habit.frequency,
+              duration: '5-10 minutes',
+              redirect: '/habits'
+            }
+          },
+          actions: ['SUGGEST_HABIT'],
+          priority: 'medium',
+          reasoning: 'User explicitly requested habit/routine guidance'
+        };
+      }
+    }
+
+    return null; // No explicit intent detected
   }
 
   extractEmotionalKeywords(text) {
@@ -57,7 +202,7 @@ class RecommendationEngine {
     ];
 
     const lowerText = text.toLowerCase();
-    return emotionalKeywords.filter(keyword => 
+    return emotionalKeywords.filter(keyword =>
       lowerText.includes(keyword)
     );
   }
@@ -67,7 +212,7 @@ class RecommendationEngine {
       'good', 'great', 'happy', 'love', 'wonderful', 'amazing', 'fantastic',
       'excellent', 'best', 'perfect', 'brilliant', 'joyful', 'blessed', 'grateful'
     ];
-    
+
     const negativeWords = [
       'bad', 'terrible', 'hate', 'awful', 'horrible', 'worst', 'disgusting',
       'sad', 'depressed', 'anxious', 'scared', 'hurt', 'pain', 'suffering',
@@ -96,7 +241,7 @@ class RecommendationEngine {
     ];
 
     const lowerText = text.toLowerCase();
-    
+
     for (const keyword of crisisKeywords) {
       if (lowerText.includes(keyword)) {
         logger.warn('Crisis indicator detected:', keyword);
