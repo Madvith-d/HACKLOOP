@@ -21,6 +21,8 @@ export default function Therapists() {
     const [isBookingOpen, setIsBookingOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
+    const [useCustomTime, setUseCustomTime] = useState(false);
+    const [customTime, setCustomTime] = useState('');
     const [therapists, setTherapists] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -47,11 +49,11 @@ export default function Therapists() {
                     // Parse available field if it's a JSON string - with safe error handling
                     const therapistsData = (json.therapists || []).map(therapist => ({
                         ...therapist,
-                        available: typeof therapist.available === 'string' 
-                            ? safeParseJSON(therapist.available, []) 
+                        available: typeof therapist.available === 'string'
+                            ? safeParseJSON(therapist.available, [])
                             : therapist.available || [],
-                        price: typeof therapist.price === 'number' 
-                            ? `$${therapist.price}/session` 
+                        price: typeof therapist.price === 'number'
+                            ? `$${therapist.price}/session`
                             : therapist.price || 'Price not available'
                     }));
                     setTherapists(therapistsData);
@@ -84,7 +86,9 @@ export default function Therapists() {
     };
 
     const confirmBooking = async () => {
-        if (!selectedDate || !selectedTime) {
+        const finalTime = useCustomTime ? customTime : selectedTime;
+
+        if (!selectedDate || !finalTime) {
             setBookingError('Please select both date and time');
             return;
         }
@@ -104,22 +108,29 @@ export default function Therapists() {
                 throw new Error('Authentication required');
             }
 
-            // Convert time format from "09:00 AM" / "01:00 PM" to "09:00" / "13:00"
-            let timeFormatted = selectedTime.trim();
-            const isPM = /PM/i.test(timeFormatted);
-            const timeMatch = timeFormatted.match(/(\d{1,2}):(\d{2})/);
-            if (timeMatch) {
-                let hours = parseInt(timeMatch[1], 10);
-                const minutes = timeMatch[2];
-                if (isPM && hours !== 12) {
-                    hours += 12;
-                } else if (!isPM && hours === 12) {
-                    hours = 0;
+            // Convert time format from "09:00 AM" / "01:00 PM" or "HH:MM" to 24-hour format "HH:MM"
+            let timeFormatted = finalTime.trim();
+
+            // Check if it's already in 24-hour format (HH:MM)
+            const is24HourFormat = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeFormatted);
+
+            if (!is24HourFormat) {
+                // Convert 12-hour format with AM/PM to 24-hour format
+                const isPM = /PM/i.test(timeFormatted);
+                const timeMatch = timeFormatted.match(/(\d{1,2}):(\d{2})/);
+                if (timeMatch) {
+                    let hours = parseInt(timeMatch[1], 10);
+                    const minutes = timeMatch[2];
+                    if (isPM && hours !== 12) {
+                        hours += 12;
+                    } else if (!isPM && hours === 12) {
+                        hours = 0;
+                    }
+                    timeFormatted = `${hours.toString().padStart(2, '0')}:${minutes}`;
+                } else {
+                    // Fallback: just remove AM/PM if format doesn't match
+                    timeFormatted = timeFormatted.replace(/\s*(AM|PM)\s*/i, '');
                 }
-                timeFormatted = `${hours.toString().padStart(2, '0')}:${minutes}`;
-            } else {
-                // Fallback: just remove AM/PM if format doesn't match
-                timeFormatted = timeFormatted.replace(/\s*(AM|PM)\s*/i, '');
             }
 
             const res = await fetch(`${API_BASE_URL}/api/therapists/${selectedTherapist.id}/book`, {
@@ -145,6 +156,8 @@ export default function Therapists() {
                 setIsBookingOpen(false);
                 setSelectedDate('');
                 setSelectedTime('');
+                setUseCustomTime(false);
+                setCustomTime('');
                 setBookingSuccess('');
                 // Optionally refresh therapists or navigate to appointments
             }, 2000);
@@ -201,52 +214,52 @@ export default function Therapists() {
             ) : (
                 <div className="therapists-grid">
                     {therapists.map((therapist) => (
-                    <div key={therapist.id} className="therapist-card">
-                        <div className="therapist-header">
-                            <img src={therapist.avatar} alt={therapist.name} className="therapist-avatar" />
-                            <div className="therapist-info">
-                                <h3>{therapist.name}</h3>
-                                <p className="specialty">{therapist.specialty}</p>
-                                <div className="therapist-rating">
-                                    <Star size={16} fill="#ffd700" stroke="#ffd700" />
-                                    <span>{therapist.rating}</span>
-                                    <span className="reviews">({therapist.reviews} reviews)</span>
+                        <div key={therapist.id} className="therapist-card">
+                            <div className="therapist-header">
+                                <img src={therapist.avatar} alt={therapist.name} className="therapist-avatar" />
+                                <div className="therapist-info">
+                                    <h3>{therapist.name}</h3>
+                                    <p className="specialty">{therapist.specialty}</p>
+                                    <div className="therapist-rating">
+                                        <Star size={16} fill="#ffd700" stroke="#ffd700" />
+                                        <span>{therapist.rating}</span>
+                                        <span className="reviews">({therapist.reviews} reviews)</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="therapist-details">
-                            <div className="detail-item">
-                                <Award size={18} />
-                                <span>{therapist.experience} experience</span>
+                            <div className="therapist-details">
+                                <div className="detail-item">
+                                    <Award size={18} />
+                                    <span>{therapist.experience} experience</span>
+                                </div>
+                                <div className="detail-item">
+                                    <MapPin size={18} />
+                                    <span>{therapist.location}</span>
+                                </div>
+                                <div className="detail-item">
+                                    <Video size={18} />
+                                    <span>Video Sessions</span>
+                                </div>
                             </div>
-                            <div className="detail-item">
-                                <MapPin size={18} />
-                                <span>{therapist.location}</span>
-                            </div>
-                            <div className="detail-item">
-                                <Video size={18} />
-                                <span>Video Sessions</span>
-                            </div>
-                        </div>
 
-                        <div className="therapist-availability">
-                            <span className="availability-label">Available:</span>
-                            <div className="availability-days">
-                                {therapist.available.map((day, index) => (
-                                    <span key={index} className="day-badge">{day}</span>
-                                ))}
+                            <div className="therapist-availability">
+                                <span className="availability-label">Available:</span>
+                                <div className="availability-days">
+                                    {therapist.available.map((day, index) => (
+                                        <span key={index} className="day-badge">{day}</span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="therapist-footer">
+                                <span className="price">{therapist.price}</span>
+                                <button onClick={() => handleBooking(therapist)} className="btn-primary">
+                                    <Calendar size={18} />
+                                    Book Session
+                                </button>
                             </div>
                         </div>
-
-                        <div className="therapist-footer">
-                            <span className="price">{therapist.price}</span>
-                            <button onClick={() => handleBooking(therapist)} className="btn-primary">
-                                <Calendar size={18} />
-                                Book Session
-                            </button>
-                        </div>
-                    </div>
                     ))}
                 </div>
             )}
@@ -279,12 +292,58 @@ export default function Therapists() {
                             {availableTimes.map((time, index) => (
                                 <button
                                     key={index}
-                                    onClick={() => setSelectedTime(time)}
-                                    className={`time-slot ${selectedTime === time ? 'selected' : ''}`}
+                                    onClick={() => {
+                                        setSelectedTime(time);
+                                        setUseCustomTime(false);
+                                    }}
+                                    className={`time-slot ${!useCustomTime && selectedTime === time ? 'selected' : ''}`}
+                                    disabled={useCustomTime}
                                 >
                                     {time}
                                 </button>
                             ))}
+                        </div>
+
+                        {/* Custom time input for demo/testing */}
+                        <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid hsl(var(--border))' }}>
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                marginBottom: '0.5rem',
+                                fontSize: '0.9rem',
+                                color: 'var(--color-muted-foreground)'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={useCustomTime}
+                                    onChange={(e) => {
+                                        setUseCustomTime(e.target.checked);
+                                        if (e.target.checked) {
+                                            setSelectedTime('');
+                                        } else {
+                                            setCustomTime('');
+                                        }
+                                    }}
+                                    style={{ cursor: 'pointer' }}
+                                />
+                                Use custom time (for demo/testing)
+                            </label>
+                            {useCustomTime && (
+                                <input
+                                    type="time"
+                                    value={customTime}
+                                    onChange={(e) => setCustomTime(e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem',
+                                        border: '1px solid hsl(var(--border))',
+                                        borderRadius: '0.5rem',
+                                        fontSize: '0.95rem'
+                                    }}
+                                    placeholder="Enter custom time"
+                                />
+                            )}
                         </div>
                     </div>
 
@@ -331,8 +390,8 @@ export default function Therapists() {
                         </div>
                     )}
 
-                    <button 
-                        onClick={confirmBooking} 
+                    <button
+                        onClick={confirmBooking}
                         className="btn-primary btn-full"
                         disabled={bookingLoading}
                     >

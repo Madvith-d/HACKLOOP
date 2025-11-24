@@ -1,64 +1,62 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, MonitorOff, Brain, BrainCircuit, Smile } from 'lucide-react';
-import * as faceapi from 'face-api.js';
-import { WebRTCService } from '../utils/webrtc';
+import { Mic, MicOff, Video, VideoOff, PhoneOff } from 'lucide-react';
+import { io } from 'socket.io-client';
 import { useApp } from '../context/AppContext';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const ICE_SERVERS = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+    ]
+};
 
 export default function VideoCall() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { user } = useApp();
-    
+
+    // Get params from URL
     const therapySessionId = searchParams.get('therapySessionId');
-    const patientId = searchParams.get('patientId');
+    const roomIdParam = searchParams.get('roomId');
     const patientName = searchParams.get('patient') || 'Patient';
     const therapistName = searchParams.get('therapist') || 'Therapist';
-    
+
+    // Use roomId from URL or generate from sessionId
+    const roomId = roomIdParam || `room-${therapySessionId || Date.now()}`;
+
     const [isAudioEnabled, setIsAudioEnabled] = useState(true);
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
-    const [isScreenSharing, setIsScreenSharing] = useState(false);
-    const [connectionStatus, setConnectionStatus] = useState('connecting');
+    const [connectionStatus, setConnectionStatus] = useState('initializing');
     const [hasRemote, setHasRemote] = useState(false);
     const [callDuration, setCallDuration] = useState(0);
-    
-    // Emotion tracking state
-    const [emotionTrackingEnabled, setEmotionTrackingEnabled] = useState(true);
-    const [modelsLoaded, setModelsLoaded] = useState(false);
-    const [currentEmotion, setCurrentEmotion] = useState(null);
-    const [emotionConfidence, setEmotionConfidence] = useState(0);
-    const [emotionTimeline, setEmotionTimeline] = useState([]);
-    const [isProcessingEmotion, setIsProcessingEmotion] = useState(false);
 
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
-    const webrtcServiceRef = useRef(null);
+    const peerConnectionRef = useRef(null);
+    const socketRef = useRef(null);
+    const localStreamRef = useRef(null);
     const callStartTimeRef = useRef(null);
-    const emotionIntervalRef = useRef(null);
-    const sessionDataRef = useRef({
-        startTime: null,
-        therapySessionId: null
-    });
+
+    // Initialize call on mount
     useEffect(() => {
-        loadFaceApiModels();
-        return () => {
-            if (emotionIntervalRef.current) {
-                clearInterval(emotionIntervalRef.current);
-            }
-        };
-    }, []);
-    useEffect(() => {
+        console.log('=== VideoCall Component Mounted ===');
+        console.log('Room ID:', roomId);
+        console.log('Session ID:', therapySessionId);
+        console.log('User:', user);
+
         initializeCall();
+
         return () => {
-            if (webrtcServiceRef.current) {
-                webrtcServiceRef.current.endCall();
-            }
+            cleanup();
         };
     }, []);
+
+    // Call duration timer
     useEffect(() => {
         if (connectionStatus === 'connected' && !callStartTimeRef.current) {
             callStartTimeRef.current = Date.now();
-            sessionDataRef.current.startTime = new Date();
         }
 
         const interval = setInterval(() => {
@@ -70,234 +68,229 @@ export default function VideoCall() {
 
         return () => clearInterval(interval);
     }, [connectionStatus]);
-    useEffect(() => {
-        if (connectionStatus === 'connected' && modelsLoaded && emotionTrackingEnabled) {
-            startEmotionTracking();
-        }
-        return () => {
-            if (emotionIntervalRef.current) {
-                clearInterval(emotionIntervalRef.current);
-            }
-        };
-    }, [connectionStatus, modelsLoaded, emotionTrackingEnabled]);
-    const loadFaceApiModels = async () => {
-        try {
-            console.log('Loading face-api models...');
-            const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
-            
-            await Promise.all([
-                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
-            ]);
-            
-            setModelsLoaded(true);
-            console.log('Face-api models loaded successfully');
-        } catch (error) {
-            console.error('Error loading face-api models:', error);
-        }
-    };
+
     const initializeCall = async () => {
         try {
-            const service = new WebRTCService();
-            webrtcServiceRef.current = service;
-            
-            service.onRemoteStream = (stream) => {
-                if (remoteVideoRef.current) {
-                    remoteVideoRef.current.srcObject = stream;
+            console.log('Initializing call...');
+            setConnectionStatus('connecting');
+
+            // 1. Get local media stream
+            console.log('Requesting media permissions...');
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+                console.log('Got local stream:', stream.id);
+            } catch (mediaError) {
+                console.error('Media access error:', mediaError);
+
+                let errorMessage = 'Could not access camera/microphone.\n\n';
+
+                if (mediaError.name === 'NotReadableError') {
+                    errorMessage += '❌ DEVICE IN USE\n\n';
+                    errorMessage += 'Your camera/microphone is already being used.\n\n';
+                    errorMessage += 'SOLUTIONS:\n';
+                    errorMessage += '• Close other tabs using the camera (like another video call tab)\n';
+                    errorMessage += '• Use a different browser (Chrome for one user, Edge for the other)\n';
+                    errorMessage += '• Close apps like Zoom, Teams, OBS, etc.\n';
+                    errorMessage += '• Restart your browser\n\n';
+                    errorMessage += 'TIP: Test with therapist in Chrome and patient in Edge!';
+                } else if (mediaError.name === 'NotAllowedError') {
+                    errorMessage += '❌ PERMISSION DENIED\n\n';
+                    errorMessage += 'Please allow camera and microphone access in your browser settings.';
+                } else if (mediaError.name === 'NotFoundError') {
+                    errorMessage += '❌ NO DEVICE FOUND\n\n';
+                    errorMessage += 'No camera or microphone detected on your system.';
+                } else {
+                    errorMessage += `Error: ${mediaError.message}`;
                 }
-                setHasRemote(true);
-            };
 
-            service.onConnectionStateChange = (state) => {
-                setConnectionStatus(state);
-            };
-            
-            const stream = await service.initializeLocalStream();
-            if (localVideoRef.current) {
-                localVideoRef.current.srcObject = stream;
-            }
-            
-            service.createPeerConnection();
-            setTimeout(() => {
-                setConnectionStatus('connected');
-            }, 2000);
-            if (therapySessionId) {
-                sessionDataRef.current.therapySessionId = therapySessionId;
-            }
-
-        } catch (error) {
-            console.error('Error initializing call:', error);
-            alert('Could not access camera/microphone. Please check permissions.');
-        }
-    };
-
-    /**
-     * Start emotion detection on remote video
-     */
-    const startEmotionTracking = () => {
-        if (emotionIntervalRef.current) {
-            clearInterval(emotionIntervalRef.current);
-        }
-
-        console.log('Starting emotion tracking...');
-        
-        emotionIntervalRef.current = setInterval(async () => {
-            if (!remoteVideoRef.current || !emotionTrackingEnabled || isProcessingEmotion) {
+                alert(errorMessage);
+                setConnectionStatus('error');
                 return;
             }
 
-            try {
-                setIsProcessingEmotion(true);
-                
-                const detection = await faceapi
-                    .detectSingleFace(remoteVideoRef.current, new faceapi.TinyFaceDetectorOptions())
-                    .withFaceLandmarks()
-                    .withFaceExpressions();
-
-                if (detection) {
-                    const expressions = detection.expressions;
-                    const { emotion, confidence } = getDominantEmotion(expressions);
-                    const distractionScore = calculateDistraction(detection);
-                    setCurrentEmotion(emotion);
-                    setEmotionConfidence(confidence);
-                    const emotionData = {
-                        timestamp: new Date(),
-                        emotion: emotion.toLowerCase(),
-                        confidence,
-                        distractionScore
-                    };
-
-                    setEmotionTimeline(prev => [...prev, emotionData]);
-                    if (emotionTimeline.length > 0 && emotionTimeline.length % 10 === 0) {
-                        await saveEmotionDataToServer();
-                    }
-                }
-            } catch (error) {
-                console.error('Error detecting emotion:', error);
-            } finally {
-                setIsProcessingEmotion(false);
+            localStreamRef.current = stream;
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
             }
-        }, 3000);
-    };
-    const getDominantEmotion = (expressions) => {
-        let maxEmotion = 'neutral';
-        let maxScore = 0;
 
-        Object.keys(expressions).forEach(emotion => {
-            if (expressions[emotion] > maxScore) {
-                maxScore = expressions[emotion];
-                maxEmotion = emotion;
-            }
-        });
+            // 2. Create peer connection
+            const pc = new RTCPeerConnection(ICE_SERVERS);
+            peerConnectionRef.current = pc;
+            console.log('Created peer connection');
 
-        return {
-            emotion: maxEmotion.charAt(0).toUpperCase() + maxEmotion.slice(1),
-            confidence: maxScore
-        };
-    };
-    const calculateDistraction = (detection) => {
-        const detectionScore = detection.detection.score;
-        return 1 - detectionScore;
-    };
-    const saveEmotionDataToServer = async () => {
-        if (!therapySessionId || emotionTimeline.length === 0) return;
-
-        try {
-            const token = localStorage.getItem('authToken');
-            const recentData = emotionTimeline.slice(-10);
-
-            await fetch(`${API_BASE_URL}/api/therapy-sessions/${therapySessionId}`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    emotionData: recentData
-                })
+            // Add local tracks to peer connection
+            stream.getTracks().forEach(track => {
+                pc.addTrack(track, stream);
+                console.log('Added local track:', track.kind);
             });
 
-            console.log('Emotion data saved to server');
+            // Handle remote stream
+            pc.ontrack = (event) => {
+                console.log('Received remote track:', event.track.kind);
+                if (remoteVideoRef.current && event.streams[0]) {
+                    remoteVideoRef.current.srcObject = event.streams[0];
+                    setHasRemote(true);
+                    setConnectionStatus('connected');
+                }
+            };
+
+            // Handle ICE candidates
+            pc.onicecandidate = (event) => {
+                if (event.candidate && socketRef.current) {
+                    console.log('Sending ICE candidate');
+                    socketRef.current.emit('ice-candidate', {
+                        candidate: event.candidate,
+                        roomId
+                    });
+                }
+            };
+
+            // Handle connection state changes
+            pc.onconnectionstatechange = () => {
+                console.log('Connection state:', pc.connectionState);
+                if (pc.connectionState === 'connected') {
+                    setConnectionStatus('connected');
+                } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                    setConnectionStatus('disconnected');
+                    setHasRemote(false);
+                }
+            };
+
+            // 3. Connect to signaling server
+            console.log('Connecting to signaling server:', API_BASE_URL);
+            const socket = io(API_BASE_URL, {
+                transports: ['websocket', 'polling']
+            });
+            socketRef.current = socket;
+
+            socket.on('connect', () => {
+                console.log('Socket connected:', socket.id);
+                const userId = user?.id || `anonymous-${Date.now()}`;
+                const role = user?.role || 'user';
+
+                console.log('Joining room:', { roomId, userId, role });
+                socket.emit('join-room', { roomId, userId, role });
+            });
+
+            socket.on('user-joined', async ({ userId: otherUserId, role: otherRole }) => {
+                console.log(`User joined: ${otherRole} ${otherUserId}`);
+                setConnectionStatus('connecting');
+
+                // Create and send offer
+                try {
+                    console.log('Creating offer...');
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    console.log('Sending offer');
+                    socket.emit('offer', { offer, roomId });
+                } catch (error) {
+                    console.error('Error creating offer:', error);
+                }
+            });
+
+            socket.on('offer', async ({ offer, fromUserId }) => {
+                console.log('Received offer from:', fromUserId);
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+                    console.log('Creating answer...');
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    console.log('Sending answer');
+                    socket.emit('answer', { answer, roomId });
+                } catch (error) {
+                    console.error('Error handling offer:', error);
+                }
+            });
+
+            socket.on('answer', async ({ answer, fromUserId }) => {
+                console.log('Received answer from:', fromUserId);
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                    console.log('Remote description set');
+                } catch (error) {
+                    console.error('Error handling answer:', error);
+                }
+            });
+
+            socket.on('ice-candidate', async ({ candidate }) => {
+                console.log('Received ICE candidate');
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                } catch (error) {
+                    console.error('Error adding ICE candidate:', error);
+                }
+            });
+
+            socket.on('user-left', ({ userId }) => {
+                console.log('User left:', userId);
+                setHasRemote(false);
+                setConnectionStatus('disconnected');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Socket disconnected');
+                setConnectionStatus('disconnected');
+            });
+
         } catch (error) {
-            console.error('Error saving emotion data:', error);
+            console.error('Error initializing call:', error);
+            alert(`Could not access camera/microphone: ${error.message}\n\nPlease check your browser permissions.`);
+            setConnectionStatus('error');
         }
     };
-    const endCallWithData = async () => {
-        try {
-            if (emotionIntervalRef.current) {
-                clearInterval(emotionIntervalRef.current);
-            }
-            if (therapySessionId && emotionTimeline.length > 0) {
-                const token = localStorage.getItem('authToken');
-                
-                await fetch(`${API_BASE_URL}/api/therapy-sessions/${therapySessionId}/complete`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        emotionTimeline,
-                        videoCallData: {
-                            connectionQuality: connectionStatus === 'connected' ? 'good' : 'poor',
-                            reconnections: 0,
-                            audioIssues: !isAudioEnabled,
-                            videoIssues: !isVideoEnabled
-                        }
-                    })
-                });
 
-                console.log('Session completed and saved');
-            }
-        } catch (error) {
-            console.error('Error saving session data:', error);
-        } finally {
-            if (webrtcServiceRef.current) {
-                webrtcServiceRef.current.endCall();
-            }
-            navigate(-1);
+    const cleanup = () => {
+        console.log('Cleaning up...');
+
+        // Stop local stream
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+        }
+
+        // Close peer connection
+        if (peerConnectionRef.current) {
+            peerConnectionRef.current.close();
+        }
+
+        // Disconnect socket
+        if (socketRef.current) {
+            socketRef.current.disconnect();
         }
     };
 
     const toggleAudio = () => {
-        if (webrtcServiceRef.current) {
-            const enabled = webrtcServiceRef.current.toggleAudio();
-            setIsAudioEnabled(enabled);
+        if (localStreamRef.current) {
+            const audioTrack = localStreamRef.current.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.enabled = !audioTrack.enabled;
+                setIsAudioEnabled(audioTrack.enabled);
+            }
         }
     };
 
     const toggleVideo = () => {
-        if (webrtcServiceRef.current) {
-            const enabled = webrtcServiceRef.current.toggleVideo();
-            setIsVideoEnabled(enabled);
+        if (localStreamRef.current) {
+            const videoTrack = localStreamRef.current.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.enabled = !videoTrack.enabled;
+                setIsVideoEnabled(videoTrack.enabled);
+            }
         }
     };
 
-    const toggleEmotionTracking = () => {
-        setEmotionTrackingEnabled(!emotionTrackingEnabled);
-        if (emotionTrackingEnabled && emotionIntervalRef.current) {
-            clearInterval(emotionIntervalRef.current);
-        }
+    const endCall = () => {
+        cleanup();
+        navigate(-1);
     };
 
     const formatDuration = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const getEmotionColor = (emotion) => {
-        const colors = {
-            'Happy': '#10b981',
-            'Sad': '#3b82f6',
-            'Angry': '#ef4444',
-            'Fearful': '#f59e0b',
-            'Disgusted': '#8b5cf6',
-            'Surprised': '#06b6d4',
-            'Neutral': '#6b7280'
-        };
-        return colors[emotion] || '#6b7280';
     };
 
     return (
@@ -308,6 +301,7 @@ export default function VideoCall() {
             flexDirection: 'column',
             position: 'relative',
         }}>
+            {/* Header */}
             <div style={{
                 position: 'absolute',
                 top: 0,
@@ -352,39 +346,9 @@ export default function VideoCall() {
                         )}
                     </div>
                 </div>
-                {currentEmotion && emotionTrackingEnabled && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.75rem',
-                        padding: '0.75rem 1.25rem',
-                        background: 'rgba(0, 0, 0, 0.6)',
-                        backdropFilter: 'blur(10px)',
-                        borderRadius: '0.75rem',
-                        border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }}>
-                        <Smile size={20} style={{ color: getEmotionColor(currentEmotion) }} />
-                        <div>
-                            <div style={{ color: 'white', fontSize: '0.875rem', fontWeight: 600 }}>
-                                {currentEmotion}
-                            </div>
-                            <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.75rem' }}>
-                                {Math.round(emotionConfidence * 100)}% confidence
-                            </div>
-                        </div>
-                        <div style={{
-                            marginLeft: '0.5rem',
-                            padding: '0.25rem 0.5rem',
-                            background: 'rgba(102, 126, 234, 0.2)',
-                            borderRadius: '0.375rem',
-                            fontSize: '0.75rem',
-                            color: '#667eea'
-                        }}>
-                            {emotionTimeline.length} points
-                        </div>
-                    </div>
-                )}
             </div>
+
+            {/* Video Grid */}
             <div style={{
                 flex: 1,
                 display: 'grid',
@@ -392,6 +356,7 @@ export default function VideoCall() {
                 gap: '1rem',
                 padding: '6rem 2rem 8rem',
             }}>
+                {/* Remote Video (Large) */}
                 <div style={{
                     position: 'relative',
                     background: '#1a1a24',
@@ -422,10 +387,22 @@ export default function VideoCall() {
                             gap: '1rem',
                             background: '#1a1a24',
                         }}>
-                            <BrainCircuit size={48} color="rgba(255, 255, 255, 0.3)" />
-                            <p style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '1.125rem' }}>
+                            <div style={{
+                                width: '64px',
+                                height: '64px',
+                                borderRadius: '50%',
+                                border: '4px solid rgba(255, 255, 255, 0.2)',
+                                borderTopColor: '#667eea',
+                                animation: 'spin 1s linear infinite',
+                            }} />
+                            <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '1.125rem' }}>
                                 {user?.role === 'therapist' ? `Waiting for ${patientName}...` : 'Waiting for therapist...'}
                             </p>
+                            <style>{`
+                                @keyframes spin {
+                                    to { transform: rotate(360deg); }
+                                }
+                            `}</style>
                         </div>
                     )}
                     <div style={{
@@ -443,6 +420,8 @@ export default function VideoCall() {
                         {user?.role === 'therapist' ? patientName : therapistName}
                     </div>
                 </div>
+
+                {/* Local Video (Small) */}
                 <div style={{
                     position: 'relative',
                     background: '#1a1a24',
@@ -490,6 +469,8 @@ export default function VideoCall() {
                     </div>
                 </div>
             </div>
+
+            {/* Controls */}
             <div style={{
                 position: 'absolute',
                 bottom: 0,
@@ -540,27 +521,7 @@ export default function VideoCall() {
                 </button>
 
                 <button
-                    onClick={toggleEmotionTracking}
-                    style={{
-                        width: '60px',
-                        height: '60px',
-                        borderRadius: '50%',
-                        background: emotionTrackingEnabled ? 'rgba(102, 126, 234, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                        border: `2px solid ${emotionTrackingEnabled ? 'rgba(102, 126, 234, 0.4)' : 'rgba(255, 255, 255, 0.2)'}`,
-                        color: 'white',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.2s',
-                    }}
-                    title={emotionTrackingEnabled ? 'Disable emotion tracking' : 'Enable emotion tracking'}
-                >
-                    <Brain size={24} />
-                </button>
-
-                <button
-                    onClick={endCallWithData}
+                    onClick={endCall}
                     style={{
                         width: '60px',
                         height: '60px',
@@ -578,23 +539,6 @@ export default function VideoCall() {
                     <PhoneOff size={24} />
                 </button>
             </div>
-            {!modelsLoaded && (
-                <div style={{
-                    position: 'absolute',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    padding: '1rem 2rem',
-                    background: 'rgba(0, 0, 0, 0.8)',
-                    backdropFilter: 'blur(10px)',
-                    borderRadius: '0.75rem',
-                    color: 'white',
-                    fontSize: '0.875rem',
-                    zIndex: 100
-                }}>
-                    Loading emotion detection models...
-                </div>
-            )}
         </div>
     );
 }

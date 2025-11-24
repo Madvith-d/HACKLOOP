@@ -162,7 +162,7 @@ export default function Appointments() {
                         <div style={{ display: 'flex', gap: '0.5rem' }}>
                             <button
                                 className="btn btn-primary"
-                                onClick={() => nextAppt && navigate(`/video-call?session=${encodeURIComponent(nextAppt.id)}&therapist=${encodeURIComponent(nextAppt.therapistName)}`)}
+                                onClick={() => nextAppt && navigate(`/video-call?therapySessionId=${encodeURIComponent(nextAppt.id)}&roomId=room-${encodeURIComponent(nextAppt.id)}&therapist=${encodeURIComponent(nextAppt.therapistName || 'Therapist')}&patient=${encodeURIComponent(user?.name || 'Patient')}`)}
                                 disabled={!nextAppt}
                                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                             >
@@ -214,7 +214,7 @@ export default function Appointments() {
                                             }}>{item.status}</span>
                                             <button
                                                 className="btn"
-                                                onClick={() => navigate(`/video-call?session=${encodeURIComponent(item.id)}&therapist=${encodeURIComponent(item.therapistName)}`)}
+                                                onClick={() => navigate(`/video-call?therapySessionId=${encodeURIComponent(item.id)}&roomId=room-${encodeURIComponent(item.id)}&therapist=${encodeURIComponent(item.therapistName || 'Therapist')}&patient=${encodeURIComponent(user?.name || 'Patient')}`)}
                                                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                                             >
                                                 <Video size={16} />

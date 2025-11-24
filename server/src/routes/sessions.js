@@ -88,4 +88,77 @@ router.post('/create', authMiddleware, async (req, res) => {
     }
 });
 
+// Add session notes (therapist only)
+router.post('/:id/notes', authMiddleware, async (req, res) => {
+    try {
+        const { notes } = req.body;
+
+        if (!notes) {
+            return res.status(400).json({ error: 'Notes are required' });
+        }
+
+        const current = (await db.query('select * from sessions where id=$1', [req.params.id])).rows[0];
+        if (!current) return res.status(404).json({ error: 'Session not found' });
+
+        // Check if user is the therapist for this session
+        if (current.therapist_id !== req.user.id && req.user.role !== 'therapist') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const updated = await db.query(
+            'update sessions set notes = $1 where id = $2 returning *',
+            [notes, req.params.id]
+        );
+
+        res.json({ session: updated.rows[0], message: 'Session notes saved' });
+    } catch (error) {
+        console.error('Error saving session notes:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Get patient data for a session (therapist only)
+router.get('/:id/patient-data', authMiddleware, async (req, res) => {
+    try {
+        const current = (await db.query('select * from sessions where id=$1', [req.params.id])).rows[0];
+        if (!current) return res.status(404).json({ error: 'Session not found' });
+
+        // Check if user is the therapist for this session
+        if (current.therapist_id !== req.user.id && req.user.role !== 'therapist') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const patientId = current.user_id;
+
+        // Get patient's recent emotions
+        const emotions = await db.query(
+            'select * from emotions where user_id = $1 order by timestamp desc limit 20',
+            [patientId]
+        );
+
+        // Get patient's recent journal entries (only shared ones)
+        const journals = await db.query(
+            `select * from journals where user_id = $1 
+             and (tags @> '"shared_with_therapist"' or tags @> '"shared"')
+             order by created_at desc limit 10`,
+            [patientId]
+        );
+
+        // Get patient's session history with this therapist
+        const sessionHistory = await db.query(
+            'select * from sessions where user_id = $1 and therapist_id = $2 order by completed_at desc limit 5',
+            [patientId, current.therapist_id]
+        );
+
+        res.json({
+            emotions: emotions.rows,
+            journals: journals.rows,
+            sessionHistory: sessionHistory.rows
+        });
+    } catch (error) {
+        console.error('Error fetching patient data:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 module.exports = router;
