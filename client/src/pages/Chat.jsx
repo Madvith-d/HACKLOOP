@@ -16,6 +16,7 @@ export default function Chat() {
     const [isTyping, setIsTyping] = useState(false);
     const [audioLevel, setAudioLevel] = useState(0);
     const [showShortcuts, setShowShortcuts] = useState(false);
+    const [redirectNotice, setRedirectNotice] = useState(null);
     const [unreadCount, setUnreadCount] = useState(0);
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const recognitionRef = useRef(null);
@@ -24,6 +25,7 @@ export default function Chat() {
     const audioContextRef = useRef(null);
     const analyserRef = useRef(null);
     const textInputRef = useRef(null);
+    const redirectTimeoutRef = useRef(null);
     const { user } = useApp();
     const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -61,6 +63,14 @@ export default function Chat() {
         };
     }, []);
 
+    useEffect(() => {
+        return () => {
+            if (redirectTimeoutRef.current) {
+                clearTimeout(redirectTimeoutRef.current);
+            }
+        };
+    }, []);
+
     // Fallback response generator (used when API fails)
     const generateFallbackResponse = (userMessage) => {
         // Backend handles all responses now - only use this for actual errors
@@ -68,6 +78,17 @@ export default function Chat() {
     };
 
     const navigate = useNavigate(); // Add navigation hook
+
+    const queueRedirect = ({ message, path, state, delay }) => {
+        setRedirectNotice(message);
+        if (redirectTimeoutRef.current) {
+            clearTimeout(redirectTimeoutRef.current);
+        }
+        redirectTimeoutRef.current = setTimeout(() => {
+            navigate(path, state ? { state } : undefined);
+            setRedirectNotice(null);
+        }, delay);
+    };
 
     // Handle agent actions based on structured response
     const handleAgentAction = (action) => {
@@ -77,27 +98,39 @@ export default function Chat() {
 
         switch (action.type) {
             case 'journal':
-                // Navigate to journal with prompt
-                // We'll pass the prompt via state or query param
-                // For now, let's assume passing state works with the router setup
-                navigate('/journal', { state: { prompt: action.payload.prompt } });
+                queueRedirect({
+                    message: 'Opening your journal so you can capture your thoughts.',
+                    path: '/journal',
+                    state: { prompt: action.payload.prompt },
+                    delay: 2000
+                });
                 break;
 
             case 'habit':
-                // Navigate to habits page
-                // Ideally we'd open a modal to create the specific habit
-                // passing the payload to pre-fill the form
-                navigate('/habits', { state: { suggestedHabit: action.payload } });
+                queueRedirect({
+                    message: 'Preparing supportive habits tailored for you.',
+                    path: '/habits',
+                    state: { suggestedHabit: action.payload },
+                    delay: 2000
+                });
                 break;
 
             case 'alert_therapist':
-                // Navigate to crisis support or therapist page
-                navigate('/crisis', { state: { alert: action.payload } });
+                queueRedirect({
+                    message: 'Redirecting you to crisis support. Please inform your loved ones.',
+                    path: '/crisis',
+                    state: { alert: action.payload },
+                    delay: 5000
+                });
                 break;
 
             case 'suggest_therapy':
-                // Navigate to therapist list
-                navigate('/therapists', { state: { suggestion: action.payload } });
+                queueRedirect({
+                    message: 'Redirecting you to professional help...',
+                    path: '/therapists',
+                    state: { suggestion: action.payload },
+                    delay: 4000
+                });
                 break;
 
             default:
@@ -388,6 +421,36 @@ export default function Chat() {
                 className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`}
                 onClick={() => setSidebarOpen(false)}
             />
+
+            {redirectNotice && (
+                <div
+                    className="redirect-notice-banner"
+                    role="status"
+                    aria-live="assertive"
+                    style={{
+                        position: 'fixed',
+                        top: '1rem',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: '#fff3cd',
+                        color: '#856404',
+                        border: '1px solid #ffeeba',
+                        borderRadius: '8px',
+                        padding: '0.75rem 1.5rem',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                        zIndex: 9999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        fontWeight: 600
+                    }}
+                >
+                    <span>{redirectNotice}</span>
+                    <span className="redirect-countdown" style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                        Please hold on...
+                    </span>
+                </div>
+            )}
 
             {/* Mobile Sidebar Toggle Button */}
             <button
