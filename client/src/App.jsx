@@ -25,6 +25,7 @@ const Journal = lazy(() => import('./pages/Journal'));
 const Habits = lazy(() => import('./pages/Habits'));
 const HabitDetail = lazy(() => import('./pages/HabitDetail'));
 const TherapistSignup = lazy(() => import('./pages/TherapistSignup'));
+const TherapistLogin = lazy(() => import('./pages/TherapistLogin'));
 
 export default function App() {
     return (
@@ -36,8 +37,9 @@ export default function App() {
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<Signup />} />
                         <Route path="/video-call" element={<VideoCall />} />
-                        <Route path="/therapist-signup" element={<TherapistSignup />} />
-                        
+                        <Route path="/therapist/signup" element={<TherapistSignup />} />
+                        <Route path="/therapist/login" element={<TherapistLogin />} />
+
                         <Route element={
                             <ProtectedRoute>
                                 <AppLayout />
@@ -59,7 +61,7 @@ export default function App() {
                             <Route path="/therapist-portal" element={<ProtectedRoute allowedRoles={['therapist']}><TherapistDashboard /></ProtectedRoute>} />
                             <Route path="/therapist-portal/patient/:patientId" element={<ProtectedRoute allowedRoles={['therapist']}><PatientDetails /></ProtectedRoute>} />
                         </Route>
-                        
+
                         <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                 </Suspense>

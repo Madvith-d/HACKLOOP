@@ -1,107 +1,350 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Mail, Lock, AlertCircle, Stethoscope, MapPin, DollarSign, Briefcase } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 export default function TherapistSignup() {
-  const API = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-  const navigate = useNavigate();
-
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    specialty: '',
+    experience: '',
+    location: 'Remote',
+    price: 100,
+  });
   const [error, setError] = useState('');
-  const [account, setAccount] = useState({ name: '', email: '', password: '', confirm: '' });
-  const [app, setApp] = useState({ fullName: '', licenseNumber: '', specialization: '', yearsExperience: '', bio: '' });
+  const { login } = useApp();
+  const navigate = useNavigate();
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  const submit = async () => {
+  useEffect(() => {
+    setIsLoaded(true);
+  }, []);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError('');
-    setLoading(true);
+
+    if (!formData.name || !formData.email || !formData.password || !formData.specialty) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
     try {
-      // 1) Create user account (role will be 'user' on server)
-      if (!account.name || !account.email || !account.password || account.password !== account.confirm) {
-        setError('Check name/email/password');
-        setLoading(false);
-        return;
-      }
-      const signupRes = await fetch(`${API}/api/auth/signup`, {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      const res = await fetch(`${API_BASE_URL}/api/auth/therapist/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: account.name, email: account.email, password: account.password })
+        body: JSON.stringify(formData)
       });
-      if (!signupRes.ok) {
-        const msg = (await signupRes.json())?.error || 'Failed to create account';
-        setError(msg);
-        setLoading(false);
-        return;
-      }
-      const { token } = await signupRes.json();
 
-      // 2) Submit therapist application
-      const applyRes = await fetch(`${API}/api/therapist/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          fullName: app.fullName || account.name,
-          licenseNumber: app.licenseNumber,
-          specialization: app.specialization,
-          yearsExperience: app.yearsExperience ? Number(app.yearsExperience) : null,
-          bio: app.bio
-        })
-      });
-      if (!applyRes.ok) {
-        const msg = (await applyRes.json())?.error || 'Failed to submit application';
+      if (!res.ok) {
+        const msg = (await res.json())?.error || 'Signup failed';
         setError(msg);
-        setLoading(false);
         return;
       }
 
-      // Success — send user to login
-      navigate('/login?applied=1');
-    } catch (e) {
+      const json = await res.json();
+      const { user: userData, token } = json;
+      login(userData, token);
+      navigate('/therapist-portal?signup=1');
+    } catch (err) {
       setError('Network error');
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <div className="dashboard-page">
-      <header className="page-header">
-        <div>
-          <h1>Therapist Signup</h1>
-          <p>Create your account and submit your application for admin approval.</p>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'linear-gradient(180deg, #fafafa 0%, #ffffff 100%)',
+      padding: '2rem',
+      overflow: 'hidden',
+    }}>
+      {/* Background decorations */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.03) 1px, transparent 0)',
+        backgroundSize: '40px 40px',
+        opacity: 0.5,
+      }} />
+
+      <div className="card auth-form-card" style={{
+        width: '100%',
+        maxWidth: '550px',
+        padding: 'clamp(1.5rem, 4vw, 3rem)',
+        opacity: isLoaded ? 1 : 0,
+        transform: isLoaded ? 'translateY(0) scale(1)' : 'translateY(20px) scale(0.95)',
+        transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.2s',
+        margin: '0 auto',
+        position: 'relative',
+        zIndex: 1,
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h1 style={{
+            fontSize: '2rem',
+            fontWeight: 800,
+            marginBottom: '0.5rem',
+            color: 'var(--color-foreground)',
+          }}>Join as a Therapist</h1>
+          <p style={{
+            color: 'var(--color-muted-foreground)',
+            fontSize: '1rem',
+          }}>Create your professional profile</p>
         </div>
-      </header>
 
-      <div className="card" style={{ padding: '1rem', display: 'grid', gap: '1rem', maxWidth: 720 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className={`btn ${step===1?'btn-primary':''}`} onClick={() => setStep(1)}>1. Account</button>
-          <button className={`btn ${step===2?'btn-primary':''}`} onClick={() => setStep(2)}>2. Application</button>
-        </div>
+        <form onSubmit={handleSubmit} style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.25rem',
+        }}>
+          {error && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.875rem 1rem',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '0.5rem',
+              color: '#ef4444',
+              fontSize: '0.875rem',
+            }}>
+              <AlertCircle size={16} />
+              <span>{error}</span>
+            </div>
+          )}
 
-        {error && <div style={{ color: 'crimson' }}>{error}</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label htmlFor="name" style={{
+              color: 'var(--color-foreground)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}>Full Name *</label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              value={formData.name}
+              onChange={handleChange}
+              placeholder="Dr. Jane Smith"
+              required
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--color-background)',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.5rem',
+                fontSize: '0.95rem',
+              }}
+            />
+          </div>
 
-        {step === 1 ? (
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            <input className="input" placeholder="Full name" value={account.name} onChange={e => setAccount({ ...account, name: e.target.value })} />
-            <input className="input" type="email" placeholder="Email" value={account.email} onChange={e => setAccount({ ...account, email: e.target.value })} />
-            <input className="input" type="password" placeholder="Password" value={account.password} onChange={e => setAccount({ ...account, password: e.target.value })} />
-            <input className="input" type="password" placeholder="Confirm Password" value={account.confirm} onChange={e => setAccount({ ...account, confirm: e.target.value })} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn" onClick={() => setStep(2)}>Next</button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label htmlFor="email" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: 'var(--color-foreground)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}>
+              <Mail size={16} />
+              Email *
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="jane@example.com"
+              required
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--color-background)',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.5rem',
+                fontSize: '0.95rem',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label htmlFor="password" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: 'var(--color-foreground)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}>
+              <Lock size={16} />
+              Password *
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="••••••••"
+              required
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--color-background)',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.5rem',
+                fontSize: '0.95rem',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label htmlFor="specialty" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: 'var(--color-foreground)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}>
+              <Stethoscope size={16} />
+              Specialty *
+            </label>
+            <input
+              id="specialty"
+              name="specialty"
+              type="text"
+              value={formData.specialty}
+              onChange={handleChange}
+              placeholder="e.g., Anxiety & Depression, PTSD"
+              required
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--color-background)',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.5rem',
+                fontSize: '0.95rem',
+              }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label htmlFor="experience" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: 'var(--color-foreground)',
+                fontSize: '0.875rem',
+                fontWeight: 600,
+              }}>
+                <Briefcase size={16} />
+                Experience
+              </label>
+              <input
+                id="experience"
+                name="experience"
+                type="text"
+                value={formData.experience}
+                onChange={handleChange}
+                placeholder="10 years"
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'var(--color-background)',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.95rem',
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <label htmlFor="price" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                color: 'var(--color-foreground)',
+                fontSize: '0.875rem',
+                fontWeight: 600,
+              }}>
+                <DollarSign size={16} />
+                Price/Session
+              </label>
+              <input
+                id="price"
+                name="price"
+                type="number"
+                value={formData.price}
+                onChange={handleChange}
+                min="0"
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'var(--color-background)',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.95rem',
+                }}
+              />
             </div>
           </div>
-        ) : (
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            <input className="input" placeholder="Legal full name" value={app.fullName} onChange={e => setApp({ ...app, fullName: e.target.value })} />
-            <input className="input" placeholder="License number" value={app.licenseNumber} onChange={e => setApp({ ...app, licenseNumber: e.target.value })} />
-            <input className="input" placeholder="Specialization" value={app.specialization} onChange={e => setApp({ ...app, specialization: e.target.value })} />
-            <input className="input" type="number" placeholder="Years of experience" value={app.yearsExperience} onChange={e => setApp({ ...app, yearsExperience: e.target.value })} />
-            <textarea className="input" rows={4} placeholder="Short professional bio" value={app.bio} onChange={e => setApp({ ...app, bio: e.target.value })} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn" onClick={() => setStep(1)}>Back</button>
-              <button className="btn btn-primary" onClick={submit} disabled={loading}>{loading ? 'Submitting...' : 'Create & Apply'}</button>
-            </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <label htmlFor="location" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: 'var(--color-foreground)',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}>
+              <MapPin size={16} />
+              Location
+            </label>
+            <input
+              id="location"
+              name="location"
+              type="text"
+              value={formData.location}
+              onChange={handleChange}
+              placeholder="Remote"
+              style={{
+                padding: '0.75rem 1rem',
+                background: 'var(--color-background)',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.5rem',
+                fontSize: '0.95rem',
+              }}
+            />
           </div>
-        )}
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
+            Create Therapist Account
+          </button>
+        </form>
+
+        <div style={{
+          marginTop: '2rem',
+          textAlign: 'center',
+          color: 'var(--color-muted-foreground)',
+          fontSize: '0.875rem',
+        }}>
+          <p>Already have an account? <Link to="/therapist/login" style={{ color: 'var(--color-foreground)', fontWeight: 600 }}>Sign in</Link></p>
+          <Link to="/" style={{
+            display: 'block',
+            marginTop: '1rem',
+            color: 'var(--color-muted-foreground)',
+            textDecoration: 'none',
+          }}>← Back to Home</Link>
+        </div>
       </div>
     </div>
   );

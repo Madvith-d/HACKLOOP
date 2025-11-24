@@ -70,4 +70,108 @@ router.get('/:id/bookings', authMiddleware, async (req, res) => {
     }
 });
 
+// Get logged-in therapist's profile
+router.get('/profile', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'therapist') {
+            return res.status(403).json({ error: 'Access denied. Therapist role required.' });
+        }
+
+        const therapist = (await db.query(
+            'select id, user_id, name, specialty, rating, reviews, experience, location, avatar, price, available from therapists where user_id=$1',
+            [req.user.id]
+        )).rows[0];
+
+        if (!therapist) {
+            return res.status(404).json({ error: 'Therapist profile not found' });
+        }
+
+        res.json({ therapist });
+    } catch (error) {
+        console.error('Error fetching therapist profile:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Update logged-in therapist's profile
+router.patch('/profile', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'therapist') {
+            return res.status(403).json({ error: 'Access denied. Therapist role required.' });
+        }
+
+        const { specialty, experience, location, price, available } = req.body;
+
+        // Build update query dynamically based on provided fields
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+
+        if (specialty !== undefined) {
+            updates.push(`specialty=$${paramCount++}`);
+            values.push(specialty);
+        }
+        if (experience !== undefined) {
+            updates.push(`experience=$${paramCount++}`);
+            values.push(experience);
+        }
+        if (location !== undefined) {
+            updates.push(`location=$${paramCount++}`);
+            values.push(location);
+        }
+        if (price !== undefined) {
+            updates.push(`price=$${paramCount++}`);
+            values.push(price);
+        }
+        if (available !== undefined) {
+            updates.push(`available=$${paramCount++}`);
+            values.push(available);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        values.push(req.user.id);
+        const query = `update therapists set ${updates.join(', ')} where user_id=$${paramCount} returning *`;
+
+        const result = await db.query(query, values);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'Therapist profile not found' });
+        }
+
+        res.json({ therapist: result.rows[0], message: 'Profile updated successfully' });
+    } catch (error) {
+        console.error('Error updating therapist profile:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Get therapist's bookings (for logged-in therapist)
+router.get('/my-bookings', authMiddleware, async (req, res) => {
+    try {
+        if (req.user.role !== 'therapist') {
+            return res.status(403).json({ error: 'Access denied. Therapist role required.' });
+        }
+
+        // Get therapist id from user_id
+        const therapist = (await db.query('select id from therapists where user_id=$1', [req.user.id])).rows[0];
+
+        if (!therapist) {
+            return res.status(404).json({ error: 'Therapist profile not found' });
+        }
+
+        const bookings = (await db.query(
+            'select * from bookings where therapist_id=$1 order by date desc, time desc',
+            [therapist.id]
+        )).rows;
+
+        res.json({ bookings });
+    } catch (error) {
+        console.error('Error fetching therapist bookings:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 module.exports = router;
