@@ -10,7 +10,7 @@ class GeminiService {
 
   async initialize() {
     if (this.initialized) return;
-    
+
     // Prevent multiple simultaneous initialization attempts
     if (this.initPromise) {
       return this.initPromise;
@@ -31,25 +31,24 @@ class GeminiService {
 
         logger.info('Initializing Gemini model...', { apiKeyLength: apiKey.length, apiKeyPrefix: apiKey.substring(0, 10) + '...' });
         this.model = new ChatGoogleGenerativeAI({
-          modelName: 'gemini-pro',
+          modelName: 'gemini-2.0-flash', // Updated to working model
           temperature: 0.7,
-          maxOutputTokens: 1024, // Increased for better quality responses
+          maxOutputTokens: 1024,
           apiKey: apiKey
         });
 
         // Test the model with a simple call to verify it works
-        // Add timeout to prevent hanging if API is unreachable
         try {
           const testMessage = [new SystemMessage('Hello')];
           const testTimeout = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Initialization test timeout after 5s')), 5000);
+            setTimeout(() => reject(new Error('Initialization test timeout after 10s')), 10000);
           });
-          
+
           const testResult = await Promise.race([
             this.model.invoke(testMessage),
             testTimeout
           ]);
-          
+
           if (testResult && testResult.content) {
             logger.info('✅ Gemini model initialized and tested successfully');
           } else {
@@ -62,7 +61,6 @@ class GeminiService {
             name: testError.name
           });
           logger.warn('Will use fallback responses. Check your API key and network connection.');
-          logger.warn('The system will still process messages with intelligent fallback responses.');
           this.model = null; // Clear model if test fails
         }
 
@@ -80,13 +78,13 @@ class GeminiService {
 
   async analyzeEmotion(text) {
     await this.initialize();
-    
+
     // If no model available, use fallback immediately
     if (!this.model) {
       logger.info('No Gemini model available, using fallback emotion analysis');
       return this.fallbackEmotionAnalysis(text);
     }
-    
+
     const systemPrompt = `You are an expert emotional analysis AI. Analyze the user's message and extract emotional information.
 Return a JSON object with this exact structure:
 {
@@ -110,37 +108,37 @@ Be accurate and empathetic. Only return valid JSON.`;
         new HumanMessage(`Analyze this message: "${text}"`)
       ];
 
-      // Increased timeout to 10 seconds for more reliable responses
+      // Increased timeout to 20 seconds
       const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => resolve(null), 10000);
+        setTimeout(() => resolve(null), 20000);
       });
 
       const analysisPromise = this.model.invoke(messages);
       const response = await Promise.race([analysisPromise, timeoutPromise]);
-      
+
       // If timeout occurred, use fallback
       if (!response) {
-        logger.warn('Emotion analysis timed out after 10s, using fallback');
+        logger.warn('Emotion analysis timed out after 20s, using fallback');
         return this.fallbackEmotionAnalysis(text);
       }
 
       const content = response.content;
-      
+
       // Extract JSON from response (handle markdown code blocks if present)
       let jsonStr = content.trim();
       if (jsonStr.startsWith('```')) {
         jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       }
-      
+
       const analysis = JSON.parse(jsonStr);
-      
+
       // Ensure all emotion scores are numbers between 0 and 1
       Object.keys(analysis.emotionScores || {}).forEach(key => {
         analysis.emotionScores[key] = Math.max(0, Math.min(1, parseFloat(analysis.emotionScores[key]) || 0));
       });
-      
+
       analysis.sentiment = Math.max(-1, Math.min(1, parseFloat(analysis.sentiment) || 0));
-      
+
       return {
         ...analysis,
         timestamp: new Date().toISOString(),
@@ -155,19 +153,15 @@ Be accurate and empathetic. Only return valid JSON.`;
 
   async generateResponse(state) {
     await this.initialize();
-    
+
     // If no model available, use fallback immediately
     if (!this.model) {
-      logger.info('No Gemini model available, using intelligent fallback response', {
-        hasEmotionalAnalysis: !!state.emotionalAnalysis,
-        hasRecommendation: !!state.recommendation,
-        userMessage: state.userMessage?.substring(0, 50)
-      });
+      logger.info('No Gemini model available, using intelligent fallback response');
       return this.fallbackResponse(state);
     }
 
     const { userMessage, emotionalAnalysis, contextualData, recommendation } = state;
-    
+
     const systemPrompt = `You are an empathetic mental health support AI assistant. Your role is to:
 1. Listen actively and validate the user's feelings
 2. Provide supportive, non-judgmental responses
@@ -185,9 +179,9 @@ Guidelines:
     let contextInfo = '';
     if (contextualData?.userHistory) {
       const history = contextualData.userHistory;
-      const hasData = (history.journalEntries?.length || 0) > 0 || 
-                      (history.habits?.length || 0) > 0 || 
-                      (history.recentEmotions?.length || 0) > 0;
+      const hasData = (history.journalEntries?.length || 0) > 0 ||
+        (history.habits?.length || 0) > 0 ||
+        (history.recentEmotions?.length || 0) > 0;
       if (hasData) {
         contextInfo = `\n\nUser has ${history.journalEntries?.length || 0} journals, ${history.habits?.length || 0} habits, ${history.recentEmotions?.length || 0} recent emotions.`;
       }
@@ -208,22 +202,22 @@ Respond with empathy and support (2-4 sentences).`;
         new HumanMessage(userPrompt)
       ];
 
-      // Increased timeout to 15 seconds for more reliable responses
+      // Increased timeout to 25 seconds
       const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => resolve(null), 15000);
+        setTimeout(() => resolve(null), 25000);
       });
 
       const responsePromise = this.model.invoke(messages);
       const response = await Promise.race([responsePromise, timeoutPromise]);
-      
+
       // If timeout occurred, use fallback
       if (!response) {
-        logger.warn('Response generation timed out after 15s, using fallback');
+        logger.warn('Response generation timed out after 25s, using fallback');
         return this.fallbackResponse(state);
       }
 
       const responseText = response.content.trim();
-      
+
       // Validate response is not empty
       if (!responseText || responseText.length === 0) {
         logger.warn('Gemini returned empty response, using fallback');
@@ -274,7 +268,7 @@ Respond with empathy and support (2-4 sentences).`;
   fallbackResponse(state) {
     const { recommendation, emotionalAnalysis, userMessage } = state;
     const lowerMessage = userMessage?.toLowerCase() || '';
-    
+
     logger.info('Generating fallback response', {
       hasRecommendation: !!recommendation,
       recommendationActions: recommendation?.actions,
@@ -282,56 +276,56 @@ Respond with empathy and support (2-4 sentences).`;
       emotionScores: emotionalAnalysis?.emotionScores,
       messagePreview: userMessage?.substring(0, 50)
     });
-    
+
     // Therapist alert cases
     if (recommendation?.actions?.includes('ALERT_THERAPIST')) {
       return '🚨 I notice you might be going through something very difficult. I\'ve alerted a therapist to check in with you. Please reach out if you need immediate support. Crisis resources are available 24/7.';
-    } 
-    
+    }
+
     // Suggest therapy for heavy emotions
     if (recommendation?.actions?.includes('SUGGEST_THERAPY')) {
       return '💙 I can see you\'re dealing with some heavy emotions right now. A therapy session might really help you work through these feelings. Would you like me to help you book a session with one of our therapists?';
     }
-    
+
     // Suggest journaling
     if (recommendation?.actions?.includes('SUGGEST_JOURNAL')) {
       return '📝 It sounds like you have a lot on your mind. Writing in your journal might help you process these feelings. Sometimes putting our thoughts on paper can bring clarity. Would you like to open your journal?';
     }
-    
+
     // Suggest habits
     if (recommendation?.actions?.includes('SUGGEST_HABIT')) {
       return '🌱 Building positive habits can really help with managing these feelings. Have you considered starting a mindfulness or exercise routine? I can help you track habits that support your wellbeing.';
     }
-    
+
     // Context-aware responses based on emotional analysis
     if (emotionalAnalysis?.emotionScores) {
       const emotions = emotionalAnalysis.emotionScores;
-      
+
       if (emotions.anxiety > 0.5 || lowerMessage.includes('anxious') || lowerMessage.includes('anxiety') || lowerMessage.includes('worried')) {
         return '💙 I understand that anxiety can feel overwhelming. Let\'s take a moment together - try taking a slow, deep breath. Remember, these feelings are temporary, and you\'re not alone in this. What helps you feel most grounded?';
       }
-      
+
       if (emotions.sadness > 0.5 || lowerMessage.includes('sad') || lowerMessage.includes('depressed') || lowerMessage.includes('down')) {
         return '💜 I hear you, and your feelings are completely valid. It\'s okay to feel sad sometimes. I\'m here with you. Is there something specific weighing on your mind that you\'d like to talk about?';
       }
-      
+
       if (emotions.anger > 0.5 || lowerMessage.includes('angry') || lowerMessage.includes('frustrated') || lowerMessage.includes('mad')) {
         return '🧡 It sounds like you\'re feeling frustrated, and that\'s understandable. Anger often tells us something important. Would you like to talk about what\'s bothering you? Sometimes expressing it can help.';
       }
-      
+
       if (emotions.fear > 0.5 || lowerMessage.includes('scared') || lowerMessage.includes('afraid') || lowerMessage.includes('fear')) {
         return '💚 Fear can be really difficult to sit with. You\'re brave for acknowledging it. Remember that you\'re safe right now. Can you tell me more about what\'s making you feel this way?';
       }
-      
+
       if (emotions.joy > 0.5 || lowerMessage.includes('happy') || lowerMessage.includes('good') || lowerMessage.includes('great')) {
         return '✨ That\'s wonderful to hear! I\'m so glad you\'re feeling good. What\'s been bringing you joy lately? Celebrating the good moments is so important.';
       }
-      
+
       if (emotions.hopelessness > 0.5 || lowerMessage.includes('hopeless') || lowerMessage.includes('worthless')) {
         return '💛 I\'m really glad you reached out. When we feel hopeless, it can seem like things won\'t get better - but they can and do. You matter, and your feelings are important. Let\'s work through this together. Have you talked to a therapist about these feelings?';
       }
     }
-    
+
     // Generic but warm fallback
     return '💭 Thank you for sharing that with me. I\'m here to listen and support you. Your feelings are valid, and it takes courage to express them. How else can I help you today?';
   }
@@ -360,7 +354,3 @@ function extractKeywords(text) {
 }
 
 module.exports = new GeminiService();
-
-
-
-

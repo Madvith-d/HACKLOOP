@@ -1,0 +1,15 @@
+{
+    "watch": [
+        "src"
+    ],
+    "ignore": [
+        "*.log",
+        "data/*",
+        "cache/*",
+        "embeddings/*",
+        "models/*",
+        "huggingface/*",
+        "node_modules/*"
+    ],
+    "ext": "js,mjs,cjs,json"
+}
