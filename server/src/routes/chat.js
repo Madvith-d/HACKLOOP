@@ -239,4 +239,168 @@ router.get('/analysis/:chatId', authMiddleware, async (req, res, next) => {
   }
 });
 
+// Get chat sessions grouped by time proximity
+router.get('/sessions', authMiddleware, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all chat messages for the user, ordered by creation time
+    const result = await db.query(`
+      SELECT id, user_message, agent_response, created_at
+      FROM chat_messages
+      WHERE user_id = $1
+      ORDER BY created_at ASC
+    `, [userId]);
+
+    // Group messages into sessions (messages within 30 minutes of each other)
+    const sessions = [];
+    let currentSession = null;
+    const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+    for (const msg of result.rows) {
+      const msgTime = new Date(msg.created_at).getTime();
+
+      if (!currentSession || (msgTime - currentSession.lastMessageTime) > SESSION_TIMEOUT_MS) {
+        // Start a new session
+        if (currentSession) {
+          sessions.push(currentSession);
+        }
+
+        currentSession = {
+          id: msg.id, // Use first message ID as session ID
+          title: msg.user_message.substring(0, 50) + (msg.user_message.length > 50 ? '...' : ''),
+          messageCount: 2, // user message + AI response
+          firstMessageId: msg.id,
+          lastMessageTime: msgTime,
+          createdAt: msg.created_at,
+          updatedAt: msg.created_at,
+          messageIds: [msg.id]
+        };
+      } else {
+        // Add to current session
+        currentSession.messageCount += 2;
+        currentSession.lastMessageTime = msgTime;
+        currentSession.updatedAt = msg.created_at;
+        currentSession.messageIds.push(msg.id);
+      }
+    }
+
+    // Don't forget the last session
+    if (currentSession) {
+      sessions.push(currentSession);
+    }
+
+    // Reverse to show most recent first
+    sessions.reverse();
+
+    res.json({
+      success: true,
+      sessions: sessions
+    });
+  } catch (error) {
+    logger.error('Error fetching chat sessions:', error);
+    next(error);
+  }
+});
+
+// Get messages for a specific session
+router.get('/sessions/:sessionId/messages', authMiddleware, async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user.id;
+
+    // First, get the session's first message to verify ownership and get timestamp
+    const sessionCheck = await db.query(`
+      SELECT created_at
+      FROM chat_messages
+      WHERE id = $1 AND user_id = $2
+    `, [sessionId, userId]);
+
+    if (sessionCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const sessionStart = new Date(sessionCheck.rows[0].created_at);
+    const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+    // Get all messages in the session window
+    const result = await db.query(`
+      SELECT id, user_message, agent_response, emotional_analysis, recommendation, created_at
+      FROM chat_messages
+      WHERE user_id = $1
+        AND created_at >= $2
+        AND created_at < $3
+      ORDER BY created_at ASC
+    `, [userId, sessionStart, new Date(sessionStart.getTime() + SESSION_TIMEOUT_MS)]);
+
+    // Format messages for frontend (alternate user/ai)
+    const messages = [];
+    for (const msg of result.rows) {
+      messages.push({
+        role: 'user',
+        content: msg.user_message,
+        timestamp: new Date(msg.created_at)
+      });
+      messages.push({
+        role: 'ai',
+        content: msg.agent_response,
+        timestamp: new Date(msg.created_at)
+      });
+    }
+
+    res.json({
+      success: true,
+      messages: messages
+    });
+  } catch (error) {
+    logger.error('Error fetching session messages:', error);
+    next(error);
+  }
+});
+
+// Delete a chat session
+router.delete('/sessions/:sessionId', authMiddleware, async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const userId = req.user.id;
+
+    // First, verify the session exists and belongs to the user
+    const sessionCheck = await db.query(`
+      SELECT created_at
+      FROM chat_messages
+      WHERE id = $1 AND user_id = $2
+    `, [sessionId, userId]);
+
+    if (sessionCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const sessionStart = new Date(sessionCheck.rows[0].created_at);
+    const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+    // Delete all messages in this session
+    const deleteResult = await db.query(`
+      DELETE FROM chat_messages
+      WHERE user_id = $1
+        AND created_at >= $2
+        AND created_at < $3
+    `, [userId, sessionStart, new Date(sessionStart.getTime() + SESSION_TIMEOUT_MS)]);
+
+    logger.info('Chat session deleted', {
+      userId,
+      sessionId,
+      deletedCount: deleteResult.rowCount
+    });
+
+    res.json({
+      success: true,
+      message: 'Session deleted successfully',
+      deletedCount: deleteResult.rowCount
+    });
+  } catch (error) {
+    logger.error('Error deleting chat session:', error);
+    next(error);
+  }
+});
+
 module.exports = router;

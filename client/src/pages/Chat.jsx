@@ -32,6 +32,87 @@ export default function Chat() {
     console.log('[Chat] API_BASE_URL:', API_BASE_URL);
     console.log('[Chat] User:', user);
 
+    // Fetch chat sessions from backend
+    const fetchSessions = async () => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.sessions) {
+                    // Transform backend sessions to match frontend format
+                    const formattedSessions = data.sessions.map(session => ({
+                        id: session.id,
+                        title: session.title,
+                        messages: [], // Will be loaded when user clicks the session
+                        date: new Date(session.createdAt),
+                        messageCount: session.messageCount
+                    }));
+                    setConversationHistory(formattedSessions);
+                }
+            }
+        } catch (error) {
+            console.error('[Chat] Error fetching sessions:', error);
+        }
+    };
+
+    // Load conversation from backend
+    const loadConversationFromBackend = async (sessionId) => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/chat/sessions/${sessionId}/messages`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.messages) {
+                    // Convert timestamp strings to Date objects
+                    return data.messages.map(msg => ({
+                        ...msg,
+                        timestamp: new Date(msg.timestamp)
+                    }));
+                }
+            }
+        } catch (error) {
+            console.error('[Chat] Error loading session messages:', error);
+        }
+        return [];
+    };
+
+    // Delete session from backend
+    const deleteSessionFromBackend = async (sessionId) => {
+        const token = localStorage.getItem('authToken');
+        if (!token) return false;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/chat/sessions/${sessionId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                return true;
+            }
+        } catch (error) {
+            console.error('[Chat] Error deleting session:', error);
+        }
+        return false;
+    };
+
     useEffect(() => {
         if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -55,6 +136,9 @@ export default function Chat() {
                 setIsListening(false);
             };
         }
+
+        // Fetch sessions on mount
+        fetchSessions();
 
         return () => {
             if (recognitionRef.current) {
@@ -213,6 +297,9 @@ export default function Chat() {
                     console.warn('[Chat] Action handling failed:', actionError);
                 }
             }
+
+            // Refresh sessions list after new message
+            fetchSessions();
         } catch (error) {
             console.error('[Chat] Error handling user speech:', error);
             setIsTyping(false);
@@ -263,6 +350,9 @@ export default function Chat() {
                     console.warn('[Chat] Action handling failed:', actionError);
                 }
             }
+
+            // Refresh sessions list after new message
+            fetchSessions();
         } catch (error) {
             console.error('[Chat] Error in handleTextSubmit:', error);
             setIsTyping(false);
@@ -304,17 +394,30 @@ export default function Chat() {
         setAvatarText('Hi! I\'m Maya, your wellness companion. Talk to me or type below!');
     };
 
-    const loadConversation = (session) => {
+    const loadConversation = async (session) => {
         setSelectedSession(session);
+
+        // Load messages from backend if not already loaded
+        if (session.messages.length === 0) {
+            const messages = await loadConversationFromBackend(session.id);
+            session.messages = messages;
+        }
+
         setConversation(session.messages);
         setAvatarText(session.messages[session.messages.length - 1]?.content || 'Session loaded!');
     };
 
-    const deleteSession = (sessionId) => {
-        setConversationHistory(prev => prev.filter(s => s.id !== sessionId));
-        if (selectedSession?.id === sessionId) {
-            setSelectedSession(null);
-            setConversation([]);
+    const deleteSession = async (sessionId) => {
+        // Delete from backend
+        const success = await deleteSessionFromBackend(sessionId);
+
+        if (success) {
+            // Remove from local state
+            setConversationHistory(prev => prev.filter(s => s.id !== sessionId));
+            if (selectedSession?.id === sessionId) {
+                setSelectedSession(null);
+                setConversation([]);
+            }
         }
     };
 
@@ -561,7 +664,7 @@ export default function Chat() {
                                     <div className="session-info">
                                         <h4>{session.title}</h4>
                                         <p>{new Date(session.date).toLocaleDateString()}</p>
-                                        <span className="message-count">{session.messages.length} messages</span>
+                                        <span className="message-count">{session.messageCount || session.messages.length} messages</span>
                                     </div>
                                     <button
                                         className="delete-session-btn"
