@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, CalendarCheck, Clock, Video, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+
 export default function Appointments() {
     const navigate = useNavigate();
     const { user } = useApp();
@@ -16,7 +17,7 @@ export default function Appointments() {
             {
                 id: 'mock-b1',
                 therapistName: 'Dr. Warrrrrrrrr',
-                date: new Date(Date.now() + 36 * 3600 * 1000).toISOString().slice(0, 10), // +36h
+                date: new Date(Date.now() + 36 * 3600 * 1000).toISOString().slice(0, 10),
                 time: '10:00 AM',
                 price: 120,
                 status: 'confirmed',
@@ -25,7 +26,7 @@ export default function Appointments() {
             {
                 id: 'mock-b2',
                 therapistName: 'Dr. Araan',
-                date: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().slice(0, 10), // +5d
+                date: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().slice(0, 10),
                 time: '2:00 PM',
                 price: 150,
                 status: 'scheduled',
@@ -36,7 +37,7 @@ export default function Appointments() {
             {
                 id: 'mock-s1',
                 therapistName: 'Dr. Ashil Jathu',
-                scheduledDate: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10), // -7d
+                scheduledDate: new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10),
                 scheduledTime: '4:00 PM',
                 status: 'completed',
                 duration: 55
@@ -141,30 +142,31 @@ export default function Appointments() {
             </header>
             <div className="dashboard-section" style={{ marginBottom: '2rem' }}>
                 <div className="card" style={{ padding: '1.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: 0, flex: '1 1 auto' }}>
                             <div style={{
                                 width: 48, height: 48, borderRadius: 12,
                                 background: 'rgba(102, 126, 234, 0.12)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                flexShrink: 0
                             }}>
                                 <CalendarCheck size={24} color="#667eea" />
                             </div>
-                            <div>
+                            <div style={{ minWidth: 0, overflow: 'hidden' }}>
                                 <div style={{ fontWeight: 700, fontSize: '1.125rem' }}>
                                     {nextAppt ? `${nextAppt.date} at ${nextAppt.time}` : 'No upcoming appointments'}
                                 </div>
-                                <div style={{ color: 'var(--color-muted-foreground)', fontSize: '0.9rem' }}>
+                                <div style={{ color: 'var(--color-muted-foreground)', fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {nextAppt ? `With ${nextAppt.therapistName}` : 'Book a session from the Therapists page'}
                                 </div>
                             </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                             <button
                                 className="btn btn-primary"
                                 onClick={() => nextAppt && navigate(`/video-call?therapySessionId=${encodeURIComponent(nextAppt.id)}&roomId=room-${encodeURIComponent(nextAppt.id)}&therapist=${encodeURIComponent(nextAppt.therapistName || 'Therapist')}&patient=${encodeURIComponent(user?.name || 'Patient')}`)}
                                 disabled={!nextAppt}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                                style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
                             >
                                 <Video size={18} />
                                 Join Call
@@ -186,22 +188,22 @@ export default function Appointments() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {upcoming.map(item => (
                                 <div key={item.id} className="card" style={{ padding: '1rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>
-                                            <div style={{ fontWeight: 700 }}>{item.therapistName}</div>
-                                            <div style={{ display: 'flex', gap: '1rem', color: 'var(--color-muted-foreground)', fontSize: '0.9rem' }}>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                                        <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+                                            <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.therapistName}</div>
+                                            <div style={{ display: 'flex', gap: '1rem', color: 'var(--color-muted-foreground)', fontSize: '0.9rem', flexWrap: 'wrap' }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                                                     <Calendar size={16} /> {item.date}
                                                 </span>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                                                     <Clock size={16} /> {item.time}
                                                 </span>
-                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                                                     <MapPin size={16} /> Video
                                                 </span>
                                             </div>
                                         </div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
                                             <span style={{
                                                 padding: '0.25rem 0.6rem',
                                                 borderRadius: 6,
@@ -210,12 +212,13 @@ export default function Appointments() {
                                                 color: '#667eea',
                                                 fontSize: 12,
                                                 fontWeight: 700,
-                                                textTransform: 'capitalize'
+                                                textTransform: 'capitalize',
+                                                whiteSpace: 'nowrap'
                                             }}>{item.status}</span>
                                             <button
                                                 className="btn"
                                                 onClick={() => navigate(`/video-call?therapySessionId=${encodeURIComponent(item.id)}&roomId=room-${encodeURIComponent(item.id)}&therapist=${encodeURIComponent(item.therapistName || 'Therapist')}&patient=${encodeURIComponent(user?.name || 'Patient')}`)}
-                                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                                                style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
                                             >
                                                 <Video size={16} />
                                                 Join

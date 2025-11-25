@@ -30,7 +30,7 @@ const server = http.createServer(app);
 
 const io = socketIo(server, {
     cors: {
-        origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'],
+        origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://192.168.31.72:5173'],
         methods: ['GET', 'POST'],
         credentials: true
     }
@@ -38,7 +38,7 @@ const io = socketIo(server, {
 
 therapistNotification.setIoInstance(io);
 app.use(cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'],
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173', 'http://192.168.31.72:5173'],
     credentials: true
 }));
 app.use(express.json());
@@ -53,8 +53,8 @@ app.use((req, res, next) => {
 
 // Routes
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
+    res.json({
+        status: 'ok',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
         version: require('../package.json').version
@@ -121,8 +121,10 @@ app.use('*', (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => {
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
     logger.info(`MindMesh+ Backend Server running on http://localhost:${PORT}`);
+    logger.info(`Network access: http://192.168.31.72:${PORT}`);
     logger.info('WebRTC signaling active');
     logger.info(`Health check: http://localhost:${PORT}/health`);
 });
